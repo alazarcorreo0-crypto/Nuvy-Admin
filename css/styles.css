@@ -1009,7 +1009,8 @@ h3 {
   flex: 0 0 auto;
 }
 
-.record-delete {
+.record-delete,
+.record-edit {
   display: grid;
   place-items: center;
   width: 38px;
@@ -1026,7 +1027,13 @@ h3 {
   background: var(--danger-soft);
 }
 
-.record-delete .icon {
+.record-edit:hover {
+  color: var(--brand);
+  background: var(--brand-soft);
+}
+
+.record-delete .icon,
+.record-edit .icon {
   width: 18px;
   height: 18px;
 }
@@ -1094,6 +1101,51 @@ h3 {
   justify-content: flex-end;
   gap: 6px;
   margin-top: auto;
+}
+
+.type-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.type-card {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 12px 14px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-sm);
+}
+
+.type-card-main {
+  min-width: 0;
+}
+
+.type-card-title {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.type-card-title strong {
+  font-size: 0.95rem;
+}
+
+.type-card p {
+  margin: 5px 0 0;
+  color: var(--muted);
+  font-size: 0.78rem;
+  line-height: 1.4;
+}
+
+.type-card .supply-actions {
+  margin-top: 0;
 }
 
 .badge {

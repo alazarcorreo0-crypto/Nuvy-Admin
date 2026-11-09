@@ -110,6 +110,7 @@ const state = {
   unsubscribeStore: null,
   installPrompt: null,
   editingSupplyId: null,
+  editingPurchaseId: null,
   corteDate: null,
   pendingRender: false,
   cloudFallback: false,
@@ -277,6 +278,7 @@ function onStoreUpdate(snapshot) {
 function navigate(view) {
   const target = VIEW_MODULES[view] ? view : 'inicio';
   state.editingSupplyId = null;
+  state.editingPurchaseId = null;
   closeDrawer();
 
   if (window.location.hash === `#${target}`) {
@@ -294,6 +296,7 @@ function handleRoute() {
   if (next !== state.view) {
     state.view = next;
     state.editingSupplyId = null;
+    state.editingPurchaseId = null;
   }
   closeDrawer();
   renderView();

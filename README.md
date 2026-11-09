@@ -33,9 +33,9 @@ La app tiene estas pantallas:
 | **Inicio** | Resumen del día y de la semana, accesos rápidos. |
 | **Ventas** | Registrar el total vendido del día (solo fecha y monto). |
 | **Gastos** | Sueldos, renta, luz, agua, gas, etc. |
-| **Compras** | Insumos que entran al inventario, con su costo. |
+| **Compras** | Insumos que entran al inventario, con su costo. Se pueden **editar** después. |
 | **Inventario** | Conteo físico de lo que queda y estimación del inventario actual. |
-| **Insumos** | Catálogo: base de nieve, toppings secos y líquidos, con su precio. |
+| **Insumos** | Catálogo: base de nieve, toppings y **tipos personalizados** (desechables, limpieza, etc.). |
 | **Corte semanal** | Consumo, costo del consumo, ganancia real y compra sugerida. |
 | **Ajustes** | Código de familia, enlace para compartir, sincronización e instalación. |
 
@@ -362,8 +362,22 @@ También puede aparecer un aviso dentro de la app con el botón **Instalar Nuvy 
 
 1. Ve a **Compras**.
 2. Elige el insumo, la cantidad comprada y el total pagado.
-3. La app convierte automáticamente a gramos o mililitros y actualiza el costo promedio.
+3. La app convierte automáticamente a gramos, mililitros o piezas y actualiza el costo promedio.
    - Los toppings líquidos se pueden comprar **por litro o por kilogramo**. Para el cálculo, la app toma 1 litro o 1 kg como 1,000 ml.
+4. Si te equivocaste, toca el botón de **editar** en la compra, corrige la fecha, el insumo, la cantidad o el total, y guarda. El inventario y el costo se recalculan solos.
+
+### Tipos de insumo personalizados
+
+En **Insumos** puedes crear tus propias categorías además de base, seco y líquido. Por ejemplo: **Desechables**, **Material de limpieza** o **Empaques**.
+
+1. En **Insumos**, toca **Agregar tipo**.
+2. Escribe el nombre y elige cómo se mide:
+   - **Piezas:** para vasos, servilletas, cucharas, bolsas, etc.
+   - **Gramos:** para productos que se pesan.
+   - **Mililitros:** para líquidos.
+3. La app arma sola las unidades de compra y de conteo. Por ejemplo, un tipo por piezas se compra por **pieza o bolsa** y se cuenta en **piezas o bolsas**.
+4. Puedes **renombrar** un tipo cuando quieras. Si ya tiene insumos registrados, no se puede cambiar cómo se mide (para no mezclar piezas con gramos).
+5. Solo puedes **borrar** un tipo que no tenga insumos. Si lo necesitas, primero cambia esos insumos a otro tipo.
 
 ### Los viernes (o cuando cierres la semana)
 
@@ -554,6 +568,7 @@ js/
   ui/                      Componentes e íconos
   views/                   Pantallas
 tests/weekly-cut.test.js   Pruebas del cálculo semanal
+tests/supply-types.test.js Pruebas de tipos de insumo personalizados
 vendor/firebase/           SDK de Firebase 10.14.1 incluido localmente
 scripts/check-syntax.mjs   Revisión de sintaxis
 ```
@@ -569,6 +584,7 @@ families/{familyCode}/records/{recordId}
 Cada registro tiene `kind`:
 
 - `supply` — insumo del catálogo
+- `supplyType` — tipo de insumo personalizado (desechables, limpieza, etc.)
 - `purchase` — compra de insumo
 - `sale` — venta del día
 - `expense` — gasto

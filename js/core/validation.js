@@ -1,10 +1,13 @@
 import { isValidDateString } from './dates.js';
 import { parseNumberInput } from './format.js';
 import {
-  SUPPLY_TYPES,
   allowedPurchaseUnits,
   countUnitOptions,
-  isContentFixed
+  defaultContentForUnit,
+  hasSupplyType,
+  isContentFixed,
+  normalizeBaseUnit,
+  purchaseUnitsForBaseUnit
 } from './units.js';
 
 export class ValidationError extends Error {
@@ -66,7 +69,7 @@ export function normalizeFamilyCode(value) {
 export function validateSupply(input) {
   const name = text(input.name, 'el nombre del insumo');
   const type = String(input.type ?? '');
-  if (!SUPPLY_TYPES[type]) {
+  if (!hasSupplyType(type)) {
     throw new ValidationError('Elige el tipo de insumo.', 'type');
   }
 
@@ -75,8 +78,8 @@ export function validateSupply(input) {
     throw new ValidationError('La unidad de compra no corresponde al tipo de insumo.', 'purchaseUnit');
   }
 
-  const contentPerUnit = isContentFixed(purchaseUnit)
-    ? 1000
+  const contentPerUnit = isContentFixed(purchaseUnit, type)
+    ? defaultContentForUnit(purchaseUnit, type)
     : decimal(input.contentPerUnit, 'el contenido por unidad', { min: 0.0001 });
 
   const pricePerUnit = decimal(input.pricePerUnit, 'el precio de compra', { min: 0 });
@@ -87,6 +90,27 @@ export function validateSupply(input) {
     purchaseUnit,
     contentPerUnit,
     pricePerUnit
+  };
+}
+
+export function validateSupplyType(input) {
+  const name = text(input.name, 'el nombre del tipo de insumo', 40);
+  const baseUnit = normalizeBaseUnit(input.baseUnit);
+  if (!['g', 'ml', 'piece'].includes(String(input.baseUnit ?? ''))) {
+    throw new ValidationError('Elige cómo se mide este tipo de insumo.', 'baseUnit');
+  }
+
+  const purchaseUnits = purchaseUnitsForBaseUnit(baseUnit);
+  const requestedUnit = String(input.defaultUnit ?? '');
+  const defaultUnit = purchaseUnits.includes(requestedUnit)
+    ? requestedUnit
+    : purchaseUnits[0];
+
+  return {
+    name,
+    baseUnit,
+    purchaseUnits,
+    defaultUnit
   };
 }
 

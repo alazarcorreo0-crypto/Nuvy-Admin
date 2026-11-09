@@ -45,26 +45,38 @@ function renderForm(ctx) {
     });
   }
 
+  const editing = ctx.state.editingPurchaseId
+    ? ctx.snapshot.purchases.find((purchase) => purchase.id === ctx.state.editingPurchaseId)
+    : null;
+  const editingSupply = editing ? ctx.store.getSupplyById(editing.supplyId) : null;
+  const selectedSupplyId = editing?.supplyId ?? '';
+  const initialUnit = editing
+    ? (editing.unit ?? editingSupply?.purchaseUnit ?? '')
+    : '';
+
   return `
     <section class="card form-card">
       <div class="card-header">
         <div>
-          <h2>Registrar compra</h2>
-          <p>La compra aumenta el inventario del sistema. No se descuenta por ventas.</p>
+          <h2>${editing ? 'Editar compra' : 'Registrar compra'}</h2>
+          <p>${editing
+            ? 'Corrige la fecha, el insumo, la cantidad o el total pagado.'
+            : 'La compra aumenta el inventario del sistema. No se descuenta por ventas.'}</p>
         </div>
+        ${editing ? '<button type="button" class="button button-small button-ghost" data-cancel-purchase-edit>Cancelar</button>' : ''}
       </div>
 
       <form id="purchase-form" novalidate>
         <div class="form-grid">
           <div class="field">
             <label for="purchase-date">Fecha</label>
-            <input id="purchase-date" name="date" type="date" required value="${ctx.today}">
+            <input id="purchase-date" name="date" type="date" required value="${editing?.date ?? ctx.today}">
           </div>
 
           <div class="field">
             <label for="purchase-supply">Insumo</label>
             <select id="purchase-supply" name="supplyId" required>
-              ${supplyOptions(supplies, '')}
+              ${supplyOptions(supplies, selectedSupplyId)}
             </select>
           </div>
 
@@ -72,8 +84,9 @@ function renderForm(ctx) {
             <label for="purchase-quantity">Cantidad comprada</label>
             <div class="input-suffix-wrap">
               <input id="purchase-quantity" name="quantity" type="number" inputmode="decimal"
-                min="0.0001" step="any" required placeholder="Ej. 1">
-              <span class="input-suffix" data-purchase-unit>unidad</span>
+                min="0.0001" step="any" required placeholder="Ej. 1"
+                value="${editing ? escapeHtml(String(editing.quantity)) : ''}">
+              <span class="input-suffix" data-purchase-unit>${escapeHtml(initialUnit ? getPurchaseUnitLabel(initialUnit) : 'unidad')}</span>
             </div>
             <span class="field-help" data-purchase-quantity-help>Escribe cuántas bolsas, kg, piezas o litros compraste.</span>
           </div>
@@ -82,7 +95,8 @@ function renderForm(ctx) {
             <label for="purchase-total">Total pagado</label>
             <div class="input-suffix-wrap">
               <input id="purchase-total" name="totalPaid" type="number" inputmode="decimal"
-                min="0" step="0.01" required placeholder="0.00">
+                min="0" step="0.01" required placeholder="0.00"
+                value="${editing ? escapeHtml(String(editing.totalPaid)) : ''}">
               <span class="input-suffix">MXN</span>
             </div>
             <span class="field-help">Lo que pagaste en total por esta compra.</span>
@@ -94,7 +108,9 @@ function renderForm(ctx) {
         </div>
 
         <div class="form-actions">
-          <button class="button button-primary" type="submit">${icon('plus')} Guardar compra</button>
+          <button class="button button-primary" type="submit">
+            ${icon(editing ? 'check' : 'plus')} ${editing ? 'Guardar cambios' : 'Guardar compra'}
+          </button>
         </div>
       </form>
     </section>
@@ -123,6 +139,9 @@ function renderPurchaseItem(purchase, ctx) {
       </div>
       <div class="record-amount">${money(purchase.totalPaid)}</div>
       <div class="record-actions">
+        <button class="record-edit" type="button" data-edit-purchase="${purchase.id}" aria-label="Editar compra">
+          ${icon('edit')}
+        </button>
         <button class="record-delete" type="button" data-delete-purchase="${purchase.id}" aria-label="Borrar compra">
           ${icon('trash')}
         </button>
@@ -224,10 +243,29 @@ export function bind(root, ctx) {
 
   handleSubmit(form, async () => {
     const values = readForm(form);
-    await ctx.store.addPurchase(values);
-    ctx.toast('Compra registrada. Inventario actualizado.', 'success');
+    if (ctx.state.editingPurchaseId) {
+      await ctx.store.updatePurchase(ctx.state.editingPurchaseId, values);
+      ctx.state.editingPurchaseId = null;
+      ctx.toast('Compra actualizada. Inventario recalculado.', 'success');
+    } else {
+      await ctx.store.addPurchase(values);
+      ctx.toast('Compra registrada. Inventario actualizado.', 'success');
+    }
     resetFormWithDate(form, ctx.today, ['supplyId']);
     updatePurchaseForm(form, ctx);
+    ctx.refresh();
+  });
+
+  root.querySelectorAll('[data-edit-purchase]').forEach((button) => {
+    button.addEventListener('click', () => {
+      ctx.state.editingPurchaseId = button.dataset.editPurchase;
+      ctx.refresh();
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    });
+  });
+
+  root.querySelector('[data-cancel-purchase-edit]')?.addEventListener('click', () => {
+    ctx.state.editingPurchaseId = null;
     ctx.refresh();
   });
 

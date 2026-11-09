@@ -1,5 +1,5 @@
 import { icon } from './icons.js';
-import { getTypeLabel } from '../core/units.js';
+import { getSupplyType, getTypeLabel } from '../core/units.js';
 
 export function escapeHtml(value) {
   return String(value ?? '')
@@ -52,7 +52,14 @@ export function badge(text, tone = 'neutral') {
 }
 
 export function supplyTypeBadge(type) {
-  const tone = type === 'base' ? 'base' : type === 'liquid' ? 'liquid' : 'dry';
+  const config = getSupplyType(type);
+  const tone = config.custom
+    ? 'neutral'
+    : type === 'base'
+      ? 'base'
+      : type === 'liquid'
+        ? 'liquid'
+        : 'dry';
   return badge(getTypeLabel(type), tone);
 }
 

@@ -6,7 +6,10 @@ import {
 import {
   countToBase,
   getBaseUnitLabel,
-  SUPPLY_TYPE_ORDER
+  listSupplyTypes,
+  setCustomSupplyTypes,
+  supplyTypeOrderIndex,
+  SUPPLY_TYPES
 } from '../core/units.js';
 import {
   ValidationError,
@@ -14,7 +17,8 @@ import {
   validateExpense,
   validatePurchase,
   validateSale,
-  validateSupply
+  validateSupply,
+  validateSupplyType
 } from '../core/validation.js';
 import { buildWeeklyCut } from '../core/weekly-cut.js';
 import { APP_CONFIG } from '../config.js';
@@ -39,7 +43,7 @@ function sortByDateDesc(records) {
 function sortSupplies(records) {
   return records.slice().sort((a, b) => {
     const typeCompare =
-      SUPPLY_TYPE_ORDER.indexOf(a.type) - SUPPLY_TYPE_ORDER.indexOf(b.type);
+      supplyTypeOrderIndex(a.type) - supplyTypeOrderIndex(b.type);
     if (typeCompare !== 0) return typeCompare;
     return String(a.name ?? '').localeCompare(String(b.name ?? ''), 'es');
   });
@@ -143,11 +147,13 @@ export class DataStore {
   }
 
   getSnapshot() {
+    setCustomSupplyTypes(this.getCustomSupplyTypes());
     return {
       familyCode: this.familyCode,
       status: { ...this.status },
       records: this.records,
       supplies: this.getSupplies(),
+      supplyTypes: listSupplyTypes(),
       purchases: this.getPurchases(),
       sales: this.getSales(),
       expenses: this.getExpenses(),
@@ -157,6 +163,12 @@ export class DataStore {
 
   getSupplies() {
     return sortSupplies(this.records.filter((record) => record.kind === 'supply'));
+  }
+
+  getCustomSupplyTypes() {
+    return this.records
+      .filter((record) => record.kind === 'supplyType')
+      .sort((a, b) => String(a.name ?? '').localeCompare(String(b.name ?? ''), 'es'));
   }
 
   getPurchases() {
@@ -244,10 +256,77 @@ export class DataStore {
     await this.deleteRecord(id);
   }
 
+  async addSupplyType(input) {
+    const data = validateSupplyType(input);
+    this.ensureSupplyTypeNameAvailable(data.name);
+    return this.addRecord('supplyType', data);
+  }
+
+  async updateSupplyType(id, input) {
+    const existing = this.records.find(
+      (record) => record.id === id && record.kind === 'supplyType'
+    );
+    if (!existing) throw new ValidationError('No se encontró el tipo de insumo.');
+
+    const data = validateSupplyType(input);
+    this.ensureSupplyTypeNameAvailable(data.name, id);
+
+    if (data.baseUnit !== existing.baseUnit) {
+      const used = this.getSupplies().some((supply) => supply.type === id);
+      if (used) {
+        throw new ValidationError(
+          'No puedes cambiar cómo se mide este tipo porque ya tiene insumos registrados. Puedes cambiarle el nombre.'
+        );
+      }
+    }
+
+    return this.updateRecord(id, data);
+  }
+
+  async deleteSupplyType(id) {
+    const used = this.getSupplies().some((supply) => supply.type === id);
+    if (used) {
+      throw new ValidationError(
+        'No puedes borrar este tipo porque tiene insumos registrados. Primero cambia esos insumos a otro tipo.'
+      );
+    }
+    await this.deleteRecord(id);
+  }
+
+  ensureSupplyTypeNameAvailable(name, exceptId = null) {
+    const clean = String(name ?? '').trim().toLocaleLowerCase('es');
+    const fixedLabels = Object.values(SUPPLY_TYPES).map((config) => config.label);
+    const customLabels = this.getCustomSupplyTypes()
+      .filter((record) => record.id !== exceptId)
+      .map((record) => record.name);
+    const duplicate = [...fixedLabels, ...customLabels].some(
+      (label) => String(label ?? '').trim().toLocaleLowerCase('es') === clean
+    );
+    if (duplicate) {
+      throw new ValidationError('Ya existe un tipo de insumo con ese nombre.', 'name');
+    }
+  }
+
   async addPurchase(input) {
     const supply = this.getSupplyById(input.supplyId);
     const data = validatePurchase(input, supply);
     return this.addRecord('purchase', {
+      ...data,
+      supplyName: supply.name,
+      unit: supply.purchaseUnit,
+      contentPerUnit: supply.contentPerUnit
+    });
+  }
+
+  async updatePurchase(id, input) {
+    const existing = this.records.find(
+      (record) => record.id === id && record.kind === 'purchase'
+    );
+    if (!existing) throw new ValidationError('No se encontró la compra.');
+
+    const supply = this.getSupplyById(input.supplyId);
+    const data = validatePurchase(input, supply);
+    return this.updateRecord(id, {
       ...data,
       supplyName: supply.name,
       unit: supply.purchaseUnit,
