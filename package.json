@@ -1,6 +1,6 @@
 {
   "name": "nuvy-admin",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "private": true,
   "type": "module",
   "description": "PWA estática para controlar inventario, ventas, gastos y corte semanal de un negocio de nieve por peso.",

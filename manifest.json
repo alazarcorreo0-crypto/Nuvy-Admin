@@ -4,7 +4,7 @@
   "description": "Control de inventario, ventas, gastos y corte semanal para un negocio de nieve por peso.",
   "lang": "es-MX",
   "dir": "ltr",
-  "start_url": "./index.html",
+  "start_url": "./",
   "scope": "./",
   "display": "standalone",
   "display_override": ["standalone", "minimal-ui"],
@@ -37,7 +37,7 @@
       "name": "Registrar venta",
       "short_name": "Venta",
       "description": "Capturar el total vendido del día",
-      "url": "./index.html#ventas",
+      "url": "./#ventas",
       "icons": [
         {
           "src": "./icons/icon-192.png",
@@ -50,7 +50,7 @@
       "name": "Hacer corte",
       "short_name": "Corte",
       "description": "Ver la ganancia real de la semana",
-      "url": "./index.html#corte",
+      "url": "./#corte",
       "icons": [
         {
           "src": "./icons/icon-192.png",

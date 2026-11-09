@@ -47,5 +47,5 @@ export const APP_CONFIG = {
    */
   defaultFamilyCode: '',
 
-  appVersion: '1.0.3'
+  appVersion: '1.0.4'
 };

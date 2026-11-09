@@ -10,7 +10,7 @@
  * Cuando publiques cambios importantes, sube el número de VERSION.
  */
 
-const VERSION = 'nuvy-admin-v1.0.3';
+const VERSION = 'nuvy-admin-v1.0.4';
 
 const APP_SHELL = [
   './',
@@ -107,12 +107,23 @@ self.addEventListener('fetch', (event) => {
         .then((response) => {
           if (response.ok) {
             const copy = response.clone();
-            caches.open(VERSION).then((cache) => cache.put('./index.html', copy));
+            caches.open(VERSION).then((cache) => {
+              cache.put('./index.html', copy.clone());
+              cache.put('./', copy);
+            });
             return response;
           }
-          return caches.match('./index.html').then((cached) => cached || response);
+          return caches
+            .match('./index.html')
+            .then((cached) => cached || caches.match('./'))
+            .then((cached) => cached || response);
         })
-        .catch(() => caches.match('./index.html'))
+        .catch(() =>
+          caches
+            .match('./index.html')
+            .then((cached) => cached || caches.match('./'))
+            .then((cached) => cached || fetch('./index.html'))
+        )
     );
     return;
   }
