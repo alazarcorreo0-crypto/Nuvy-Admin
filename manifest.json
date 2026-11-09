@@ -1,0 +1,63 @@
+{
+  "name": "Nuvy Admin",
+  "short_name": "Nuvy",
+  "description": "Control de inventario, ventas, gastos y corte semanal para un negocio de nieve por peso.",
+  "lang": "es-MX",
+  "dir": "ltr",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "display_override": ["standalone", "minimal-ui"],
+  "orientation": "any",
+  "background_color": "#f6f3ec",
+  "theme_color": "#0f766e",
+  "categories": ["business", "productivity", "finance"],
+  "icons": [
+    {
+      "src": "./icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "./icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "./icons/maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Registrar venta",
+      "short_name": "Venta",
+      "description": "Capturar el total vendido del día",
+      "url": "./index.html#ventas",
+      "icons": [
+        {
+          "src": "./icons/icon-192.png",
+          "sizes": "192x192",
+          "type": "image/png"
+        }
+      ]
+    },
+    {
+      "name": "Hacer corte",
+      "short_name": "Corte",
+      "description": "Ver la ganancia real de la semana",
+      "url": "./index.html#corte",
+      "icons": [
+        {
+          "src": "./icons/icon-192.png",
+          "sizes": "192x192",
+          "type": "image/png"
+        }
+      ]
+    }
+  ]
+}

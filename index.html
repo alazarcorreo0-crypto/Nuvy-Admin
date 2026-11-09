@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0f766e">
+  <meta name="description" content="Nuvy Admin: control de inventario, ventas, gastos y corte semanal para un negocio de nieve por peso.">
+  <meta name="format-detection" content="telephone=no">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="Nuvy Admin">
+  <title>Nuvy Admin</title>
+
+  <link rel="manifest" href="./manifest.json">
+  <link rel="icon" type="image/png" sizes="192x192" href="./icons/icon-192.png">
+  <link rel="apple-touch-icon" sizes="180x180" href="./icons/apple-touch-icon.png">
+  <link rel="stylesheet" href="./css/styles.css">
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar" id="sidebar" aria-label="Menú principal">
+      <a class="brand" href="#inicio" aria-label="Nuvy Admin, ir al inicio">
+        <span class="brand-mark" id="brand-mark" aria-hidden="true"></span>
+        <span>
+          <span class="brand-name">Nuvy Admin</span>
+          <span class="brand-subtitle">Nieve por peso</span>
+        </span>
+      </a>
+
+      <nav class="side-nav" id="side-nav" aria-label="Navegación principal"></nav>
+
+      <div class="sidebar-footer">
+        <div class="sidebar-note">
+          El inventario solo cambia con compras y conteos físicos. Las ventas no descuentan gramos.
+        </div>
+      </div>
+    </aside>
+
+    <div class="drawer-backdrop" id="drawer-backdrop" aria-hidden="true"></div>
+
+    <div class="main-column">
+      <header class="app-header">
+        <div class="header-left">
+          <button class="button button-icon button-ghost menu-button" id="menu-button" type="button" aria-label="Abrir menú"></button>
+          <div class="header-title" id="header-title"></div>
+        </div>
+        <div class="header-right">
+          <a class="family-chip hidden" id="family-chip" href="#ajustes" title="Ver ajustes de la familia"></a>
+          <span id="sync-pill-wrap"></span>
+        </div>
+      </header>
+
+      <main class="main-content" id="view-root"></main>
+    </div>
+  </div>
+
+  <nav class="bottom-nav" id="bottom-nav" aria-label="Navegación rápida"></nav>
+
+  <div class="toast-container" id="toast-container" aria-live="polite" aria-atomic="true"></div>
+
+  <div class="loading-screen" id="loading-screen">
+    <div class="loading-card">
+      <div class="spinner" aria-hidden="true"></div>
+      <strong id="loading-text">Preparando tus datos…</strong>
+      <span class="field-help">Un momento, por favor.</span>
+    </div>
+  </div>
+
+  <div class="onboarding hidden" id="onboarding"></div>
+
+  <noscript>
+    <div class="loading-screen">
+      <div class="loading-card">
+        <strong>Activa JavaScript</strong>
+        <span class="field-help">Nuvy Admin necesita JavaScript para funcionar.</span>
+      </div>
+    </div>
+  </noscript>
+
+  <script type="module" src="./js/app.js"></script>
+</body>
+</html>

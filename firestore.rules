@@ -1,0 +1,50 @@
+rules_version = '2';
+
+/*
+ * Reglas de Firestore para Nuvy Admin.
+ *
+ * La app no usa cuentas ni contraseñas. El código de familia es un espacio
+ * compartido: cualquier persona que tenga el código puede leer y escribir los
+ * datos de esa familia. No compartas el enlace en lugares públicos.
+ *
+ * Publica estas reglas en Firebase Console > Firestore Database > Reglas.
+ */
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function isValidFamily(code) {
+      return code is string
+        && code.size() >= 6
+        && code.size() <= 64
+        && code.matches('^[A-Z0-9-]+$');
+    }
+
+    function isValidRecord(data) {
+      return data.keys().hasAll(['id', 'kind', 'createdAt', 'updatedAt', 'schemaVersion'])
+        && data.id is string
+        && data.kind in ['supply', 'purchase', 'sale', 'expense', 'count']
+        && data.createdAt is string
+        && data.updatedAt is string
+        && data.schemaVersion is int;
+    }
+
+    match /families/{familyCode}/records/{recordId} {
+      allow read: if isValidFamily(familyCode);
+
+      allow create: if isValidFamily(familyCode)
+        && isValidRecord(request.resource.data)
+        && request.resource.data.id == recordId;
+
+      allow update: if isValidFamily(familyCode)
+        && isValidRecord(request.resource.data)
+        && request.resource.data.id == recordId
+        && request.resource.data.kind == resource.data.kind;
+
+      allow delete: if isValidFamily(familyCode);
+    }
+
+    // Todo lo demás queda cerrado.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
