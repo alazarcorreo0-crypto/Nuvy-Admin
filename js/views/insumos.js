@@ -82,7 +82,7 @@ function renderForm(ctx) {
             <select id="supply-unit" name="purchaseUnit" required>
               ${unitOptionsFor(type, unit)}
             </select>
-            <span class="field-help" data-unit-help>La base se compra por bolsa; los toppings secos por kg o pieza; los líquidos por litro.</span>
+            <span class="field-help" data-unit-help>La base se compra por bolsa; los toppings secos por kg o pieza; los líquidos por litro o kg.</span>
           </div>
 
           <div class="field">
@@ -242,7 +242,7 @@ function syncFormForUnit(form) {
       type === 'base'
         ? 'La base se compra por bolsa. Escribe cuántos gramos trae una bolsa.'
         : type === 'liquid'
-          ? 'Los toppings líquidos se compran por litro. Un litro son 1,000 ml.'
+          ? 'Los toppings líquidos se compran por litro o por kg. La app toma 1 litro o 1 kg como 1,000 ml.'
           : 'Los toppings secos se compran por kg o por pieza.';
   }
 

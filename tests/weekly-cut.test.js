@@ -39,6 +39,12 @@ const LIQUID = {
   pricePerUnit: 180
 };
 
+const LIQUID_KG = {
+  ...LIQUID,
+  id: 'chocolate-kg',
+  purchaseUnit: 'kg'
+};
+
 let sequence = 0;
 function nextId(prefix) {
   sequence += 1;
@@ -300,6 +306,7 @@ test('la compra sugerida redondea bolsas hacia arriba y kg a dos decimales', () 
   assert.equal(suggestPurchaseQuantity(NUEZ, 400), 0.4);
   assert.equal(suggestPurchaseQuantity(NUEZ, 401), 0.41);
   assert.equal(suggestPurchaseQuantity(LIQUID, 1000), 1);
+  assert.equal(suggestPurchaseQuantity(LIQUID_KG, 1500), 1.5);
 });
 
 test('conversiones de compra y conteo', () => {
@@ -309,6 +316,9 @@ test('conversiones de compra y conteo', () => {
   assert.equal(countToBase(500, 'g', BASE), 500);
   assert.equal(countToBase(1.5, 'kg', BASE), 1500);
   assert.equal(countToBase(1, 'liter', LIQUID), 1000);
+  assert.equal(countToBase(250, 'g', LIQUID), 250);
+  assert.equal(countToBase(1.5, 'kg', LIQUID), 1500);
+  assert.equal(purchaseToBase(2, LIQUID_KG), 2000);
 });
 
 test('un insumo sin actividad no ensucia el corte', () => {

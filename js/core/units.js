@@ -6,6 +6,8 @@
  *   gramos (g) para sólidos y mililitros (ml) para líquidos.
  * - Las compras se capturan en la unidad de compra del insumo
  *   (bolsa, kg, pieza o litro) y se convierten a la unidad base.
+ * - Los toppings líquidos se pueden comprar por litro o por kg. Para la app,
+ *   1 litro y 1 kg equivalen a 1,000 ml.
  * - Los conteos físicos se pueden capturar en g, kg, bolsa, pieza, ml o L.
  */
 
@@ -30,7 +32,7 @@ export const SUPPLY_TYPES = {
     label: 'Topping líquido',
     shortLabel: 'Líquido',
     baseUnit: 'ml',
-    units: ['liter'],
+    units: ['liter', 'kg'],
     defaultUnit: 'liter',
     defaultContent: 1000
   }
@@ -104,7 +106,9 @@ export function getContentHelp(unit, type) {
     case 'piece':
       return `Ejemplo: una pieza pesa 5 ${suffix}.`;
     case 'kg':
-      return `Un kilogramo siempre son 1,000 ${suffix}.`;
+      return getSupplyType(type).baseUnit === 'ml'
+        ? 'Se toman 1,000 ml por kilogramo.'
+        : `Un kilogramo siempre son 1,000 ${suffix}.`;
     case 'liter':
       return `Un litro siempre son 1,000 ${suffix}.`;
     default:
@@ -142,14 +146,17 @@ export function purchaseRecordBaseQuantity(purchase) {
 /**
  * Unidades que tiene sentido usar al hacer un conteo físico.
  * Para sólidos se ofrecen g/kg y, si aplica, bolsas o piezas.
- * Para líquidos se ofrecen ml/L.
+ * Para líquidos se ofrecen ml/L y también g/kg, porque a veces se compran
+ * por peso (por ejemplo, un topping líquido que llega por kilogramo).
  */
 export function countUnitOptions(supply) {
   if (!supply) return [];
   if (getBaseUnit(supply) === 'ml') {
     return [
       { value: 'ml', label: 'mililitros (ml)', factor: 1 },
-      { value: 'liter', label: 'litros (L)', factor: 1000 }
+      { value: 'liter', label: 'litros (L)', factor: 1000 },
+      { value: 'g', label: 'gramos (g)', factor: 1 },
+      { value: 'kg', label: 'kilogramos (kg)', factor: 1000 }
     ];
   }
 

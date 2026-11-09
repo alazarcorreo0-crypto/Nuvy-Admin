@@ -363,6 +363,7 @@ También puede aparecer un aviso dentro de la app con el botón **Instalar Nuvy 
 1. Ve a **Compras**.
 2. Elige el insumo, la cantidad comprada y el total pagado.
 3. La app convierte automáticamente a gramos o mililitros y actualiza el costo promedio.
+   - Los toppings líquidos se pueden comprar **por litro o por kilogramo**. Para el cálculo, la app toma 1 litro o 1 kg como 1,000 ml.
 
 ### Los viernes (o cuando cierres la semana)
 
