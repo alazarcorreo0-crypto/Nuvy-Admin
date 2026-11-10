@@ -1,6 +1,7 @@
 # Publica Nuvy Admin en GitHub Pages.
 #
 # - Se ejecuta en cada push a main (y a mano desde la pestaña Actions).
+# - Antes de publicar corren los tests y la revisión de sintaxis.
 # - "enablement: true" vuelve a activar Pages si estaba desactivado.
 # - Solo se suben los archivos de la app, no tests ni configuración del repo.
 
@@ -21,7 +22,26 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # Primero se verifica que todo esté en orden: los tests y la revisión
+  # de sintaxis deben pasar ANTES de publicar. Si algo falla, el sitio
+  # no se actualiza.
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Correr los tests
+        run: npm test
+
+      - name: Revisar sintaxis y archivos
+        run: npm run check
+
   build:
+    needs: test
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

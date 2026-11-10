@@ -21,7 +21,10 @@ const KINDS_THE_APP_WRITES = [
   'purchase',
   'sale',
   'expense',
-  'count'
+  'count',
+  'waste',
+  'cashClose',
+  'goal'
 ];
 
 function allowedKindsInRules() {

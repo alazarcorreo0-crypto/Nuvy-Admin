@@ -13,14 +13,18 @@ import {
 } from '../core/units.js';
 import {
   ValidationError,
+  validateCashClose,
   validateCount,
   validateExpense,
+  validateGoal,
   validatePurchase,
   validateSale,
   validateSupply,
-  validateSupplyType
+  validateSupplyType,
+  validateWaste
 } from '../core/validation.js';
 import { buildWeeklyCut } from '../core/weekly-cut.js';
+import { buildMonthlyCut } from '../core/monthly-cut.js';
 import { APP_CONFIG } from '../config.js';
 
 function nowIso() {
@@ -157,7 +161,10 @@ export class DataStore {
       purchases: this.getPurchases(),
       sales: this.getSales(),
       expenses: this.getExpenses(),
-      counts: this.getCounts()
+      counts: this.getCounts(),
+      wastes: this.getWastes(),
+      cashCloses: this.getCashCloses(),
+      goals: this.getGoals()
     };
   }
 
@@ -191,6 +198,24 @@ export class DataStore {
     return sortByDateDesc(
       this.records.filter((record) => record.kind === 'count')
     );
+  }
+
+  getWastes() {
+    return sortByDateDesc(
+      this.records.filter((record) => record.kind === 'waste')
+    );
+  }
+
+  getCashCloses() {
+    return sortByDateDesc(
+      this.records.filter((record) => record.kind === 'cashClose')
+    );
+  }
+
+  getGoals() {
+    return this.records
+      .filter((record) => record.kind === 'goal')
+      .sort((a, b) => String(b.month ?? '').localeCompare(String(a.month ?? '')));
   }
 
   getSupplyById(id) {
@@ -339,9 +364,91 @@ export class DataStore {
     return this.addRecord('sale', data);
   }
 
+  async updateSale(id, input) {
+    const existing = this.records.find(
+      (record) => record.id === id && record.kind === 'sale'
+    );
+    if (!existing) throw new ValidationError('No se encontró la venta.');
+
+    const data = validateSale(input);
+    return this.updateRecord(id, data);
+  }
+
   async addExpense(input) {
     const data = validateExpense(input);
     return this.addRecord('expense', data);
+  }
+
+  async updateExpense(id, input) {
+    const existing = this.records.find(
+      (record) => record.id === id && record.kind === 'expense'
+    );
+    if (!existing) throw new ValidationError('No se encontró el gasto.');
+
+    const data = validateExpense(input);
+    return this.updateRecord(id, data);
+  }
+
+  /**
+   * Merma de insumo: se guarda en unidad base (g, ml o piezas) igual que
+   * los conteos, con el motivo por el que se perdió.
+   */
+  async addWaste(input) {
+    const supply = this.getSupplyById(input.supplyId);
+    const data = validateWaste(input, supply);
+    const base = countToBase(data.quantity, data.unit, supply);
+    return this.addRecord('waste', {
+      date: data.date,
+      supplyId: supply.id,
+      supplyName: supply.name,
+      quantity: base,
+      enteredQuantity: data.quantity,
+      enteredUnit: data.unit,
+      contentPerUnit: supply.contentPerUnit,
+      baseUnit: getBaseUnitLabel(supply),
+      reason: data.reason
+    });
+  }
+
+  /**
+   * Cierre de caja del día: el efectivo contado al terminar.
+   */
+  async addCashClose(input) {
+    const data = validateCashClose(input);
+    return this.addRecord('cashClose', data);
+  }
+
+  /**
+   * Meta del mes. Solo puede haber una por mes: si ya existe, se actualiza.
+   */
+  async setGoal(input) {
+    const data = validateGoal(input);
+    const existing = this.getGoalFor(data.month);
+    if (existing) {
+      return this.updateRecord(existing.id, data);
+    }
+    return this.addRecord('goal', data);
+  }
+
+  getGoalFor(month) {
+    return (
+      this.records.find(
+        (record) => record.kind === 'goal' && record.month === month
+      ) ?? null
+    );
+  }
+
+  /**
+   * Devuelve un registro borrado a como estaba (para "Deshacer").
+   * No crea uno nuevo: reusa el id y las fechas originales para que la
+   * sincronización entre teléfonos lo vea como el mismo registro.
+   */
+  async restoreRecord(record) {
+    if (!record || typeof record !== 'object' || !record.id || !record.kind) {
+      throw new ValidationError('No hay nada que deshacer.');
+    }
+    await this.adapter.put({ ...record });
+    return record;
   }
 
   async addCount(input) {
@@ -373,7 +480,20 @@ export class DataStore {
       purchases: this.getPurchases(),
       sales: this.getSales(),
       expenses: this.getExpenses(),
-      counts: this.getCounts()
+      counts: this.getCounts(),
+      wastes: this.getWastes()
+    });
+  }
+
+  getMonthlyCut(month) {
+    return buildMonthlyCut({
+      month,
+      supplies: this.getSupplies(),
+      purchases: this.getPurchases(),
+      sales: this.getSales(),
+      expenses: this.getExpenses(),
+      counts: this.getCounts(),
+      wastes: this.getWastes()
     });
   }
 

@@ -8,6 +8,22 @@ const KEYS = {
   forceLocal: 'nuvy.forceLocal'
 };
 
+function lastBackupKey(familyCode) {
+  return `nuvy.lastBackup.${normalizeFamilyCode(familyCode)}`;
+}
+
+/**
+ * Guarda cuándo se descargó el último respaldo de una familia.
+ * Se usa para el recordatorio en Ajustes ("Último respaldo: hace N días").
+ */
+export function saveLastBackupDate(familyCode, exportedAt = new Date().toISOString()) {
+  safeSet(lastBackupKey(familyCode), exportedAt);
+}
+
+export function readLastBackupDate(familyCode) {
+  return safeGet(lastBackupKey(familyCode));
+}
+
 function cloudFallbackKey(familyCode) {
   return `nuvy.cloudFallback.${normalizeFamilyCode(familyCode)}`;
 }

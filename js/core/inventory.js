@@ -1,3 +1,5 @@
+import { addDays } from './dates.js';
+import { sum } from './format.js';
 import { purchaseRecordBaseQuantity } from './units.js';
 
 function compareCounts(a, b) {
@@ -69,11 +71,20 @@ export function getPurchasesBefore(purchases, supplyId, date) {
     .sort(comparePurchases);
 }
 
-export function getPurchasesAfterCount(purchases, supplyId, count) {
+/**
+ * Compras registradas después de un conteo (por fecha, o por createdAt
+ * cuando comparten la misma fecha).
+ *
+ * `limitDate` es un límite superior opcional: solo cuentan las compras
+ * con fecha hasta ese día. Sirve para que las compras de semanas
+ * posteriores no invaliden los conteos de la semana que se revisa.
+ */
+export function getPurchasesAfterCount(purchases, supplyId, count, limitDate = null) {
   if (!count) return [];
   return purchases
     .filter((purchase) => {
       if (purchase.supplyId !== supplyId) return false;
+      if (limitDate && purchase.date > limitDate) return false;
       if (purchase.date > count.date) return true;
       if (purchase.date < count.date) return false;
       return String(purchase.createdAt ?? '') > String(count.createdAt ?? '');
@@ -147,8 +158,12 @@ export function getEstimatedInventory(supply, counts, purchases, asOfDate) {
     };
   }
 
-  const purchasesAfter = getPurchasesAfterCount(purchases, supply.id, lastCount)
-    .filter((purchase) => purchase.date <= asOfDate);
+  const purchasesAfter = getPurchasesAfterCount(
+    purchases,
+    supply.id,
+    lastCount,
+    asOfDate
+  );
   const added = purchasesAfter.reduce(
     (total, purchase) => total + purchaseRecordBaseQuantity(purchase),
     0
@@ -162,8 +177,8 @@ export function getEstimatedInventory(supply, counts, purchases, asOfDate) {
   };
 }
 
-export function hasPurchasesAfterCount(purchases, supplyId, count) {
-  return getPurchasesAfterCount(purchases, supplyId, count).length > 0;
+export function hasPurchasesAfterCount(purchases, supplyId, count, limitDate = null) {
+  return getPurchasesAfterCount(purchases, supplyId, count, limitDate).length > 0;
 }
 
 export function getLastPurchase(purchases, supplyId, throughDate = '9999-12-31') {
@@ -174,4 +189,51 @@ export function getLastPurchase(purchases, supplyId, throughDate = '9999-12-31')
     )
     .sort(comparePurchases)
     .at(-1) ?? null;
+}
+
+/**
+ * Consumo diario promedio de un insumo en las últimas `windowDays` días
+ * (por defecto 4 semanas).
+ *
+ * Se calcula como: consumo total del periodo ÷ días del periodo, donde el
+ * consumo es conteo inicial + compras del periodo − último conteo.
+ * Devuelve null si no hay historial suficiente (sin conteos que abarquen
+ * la ventana o sin consumo).
+ */
+export function averageDailyConsumption(
+  counts,
+  purchases,
+  supply,
+  asOfDate,
+  windowDays = 28
+) {
+  const windowStart = addDays(asOfDate, -(windowDays - 1));
+  const initial = getInitialCount(counts, supply.id, windowStart);
+  const latest = getLastCount(counts, supply.id, asOfDate);
+  if (!initial || !latest || latest.date < windowStart || latest.date <= initial.date) {
+    return null;
+  }
+
+  const purchasedBase = sum(
+    getPurchasesInRange(purchases, supply.id, windowStart, asOfDate).map(
+      (purchase) => purchaseRecordBaseQuantity(purchase)
+    )
+  );
+  const consumption =
+    Number(initial.quantity) + purchasedBase - Number(latest.quantity);
+  if (consumption <= 0) return null;
+  return consumption / windowDays;
+}
+
+/**
+ * Días que alcanza el inventario estimado de un insumo con el consumo
+ * diario promedio. Devuelve null si no se puede calcular (sin conteos
+ * recientes o sin historial de consumo).
+ */
+export function daysOfSupplyRemaining(supply, counts, purchases, asOfDate) {
+  const estimate = getEstimatedInventory(supply, counts, purchases, asOfDate);
+  if (estimate.quantity === null) return null;
+  const daily = averageDailyConsumption(counts, purchases, supply, asOfDate);
+  if (daily === null || daily <= 0) return null;
+  return Math.floor(estimate.quantity / daily);
 }

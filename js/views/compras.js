@@ -19,6 +19,7 @@ import {
 import { icon } from '../ui/icons.js';
 import {
   confirmDelete,
+  deleteWithUndo,
   downloadCsv,
   exportCsvButton,
   groupByDate,
@@ -26,6 +27,16 @@ import {
   readForm,
   resetFormWithDate
 } from './shared.js';
+import {
+  bindFilterBar,
+  bindShowMore,
+  filterRecords,
+  getFilters,
+  renderFilterBar,
+  renderShowMore
+} from './filters.js';
+
+const VIEW_KEY = 'compras';
 
 function supplyOptions(supplies, selected) {
   return supplies
@@ -154,7 +165,10 @@ function renderPurchaseItem(purchase, ctx) {
 
 export function render(ctx) {
   const purchases = ctx.snapshot.purchases;
-  const groups = groupByDate(purchases);
+  const filters = getFilters(ctx, VIEW_KEY);
+  const filteredPurchases = filterRecords(purchases, filters);
+  const shownPurchases = filteredPurchases.slice(0, filters.limit);
+  const groups = groupByDate(shownPurchases);
   const form = renderForm(ctx);
 
   return `
@@ -174,6 +188,15 @@ export function render(ctx) {
           <p>${purchases.length} compra${purchases.length === 1 ? '' : 's'} en total.</p>
         </div>
       </div>
+      ${purchases.length > 0 ? renderFilterBar({
+          viewKey: VIEW_KEY,
+          filters,
+          supplies: ctx.snapshot.supplies,
+          showSupply: true,
+          supplyLabel: 'Insumo comprado',
+          count: filteredPurchases.length,
+          total: purchases.length
+        }) : ''}
       ${groups.length
         ? `<div class="record-list">
             ${groups
@@ -192,10 +215,16 @@ export function render(ctx) {
           </div>`
         : emptyState({
             iconName: 'cart',
-            title: 'Todavía no hay compras',
-            text: 'Registra la primera compra de base o toppings para que el inventario empiece a moverse.',
-            action: '<button class="button button-soft" data-go="insumos">Revisar insumos</button>'
+            title: purchases.length ? 'Ninguna compra coincide con el filtro' : 'Todavía no hay compras',
+            text: purchases.length
+              ? 'Prueba con otro rango de fechas u otro insumo.'
+              : 'Registra la primera compra de base o toppings para que el inventario empiece a moverse.',
+            action: purchases.length
+              ? ''
+              : '<button class="button button-soft" data-go="insumos">Revisar insumos</button>'
           })}
+
+      ${renderShowMore(VIEW_KEY, filteredPurchases.length, shownPurchases.length)}
     </section>
   `;
 }
@@ -292,13 +321,16 @@ export function bind(root, ctx) {
   root.querySelectorAll('[data-delete-purchase]').forEach((button) => {
     button.addEventListener('click', async () => {
       if (!confirmDelete('¿Borrar esta compra? El inventario estimado cambiará.')) return;
+      const purchase = ctx.snapshot.purchases.find((item) => item.id === button.dataset.deletePurchase);
+      if (!purchase) return;
       try {
-        await ctx.store.deleteRecord(button.dataset.deletePurchase);
-        ctx.toast('Compra borrada.', 'success');
-        ctx.refresh();
+        await deleteWithUndo(ctx, purchase, 'Compra borrada.');
       } catch (error) {
         ctx.toast(error.message, 'danger');
       }
     });
   });
+
+  bindFilterBar(root, ctx, VIEW_KEY);
+  bindShowMore(root, ctx, VIEW_KEY);
 }

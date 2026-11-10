@@ -1,6 +1,14 @@
 import { APP_CONFIG } from '../config.js';
-import { formatDateShort } from '../core/dates.js';
+import { daysBetweenDates, formatDateShort } from '../core/dates.js';
 import { normalizeFamilyCode } from '../core/validation.js';
+import {
+  backupSummaryText,
+  buildBackup,
+  isSameFamily,
+  parseBackup,
+  serializeBackup,
+  summarizeBackup
+} from '../core/backup.js';
 import {
   escapeHtml,
   notice,
@@ -16,18 +24,93 @@ import {
   hasCodeFirebaseConfig,
   isForceLocal,
   parseFirebaseConfigInput,
+  readLastBackupDate,
   readLocalRecords,
   readStoredFirebaseConfig,
   saveFamilyCode,
   saveFirebaseConfig,
+  saveLastBackupDate,
   savePendingMigration,
   setForceLocal
 } from '../services/settings-store.js';
 import {
   confirmDelete,
   copyToClipboard,
-  handleSubmit
+  downloadJson,
+  handleSubmit,
+  readForm
 } from './shared.js';
+
+function monthLabel(month) {
+  const [year, monthNumber] = month.split('-').map(Number);
+  const date = new Date(Date.UTC(year, monthNumber - 1, 1));
+  return date.toLocaleDateString('es-MX', {
+    month: 'long',
+    year: 'numeric',
+    timeZone: 'UTC'
+  });
+}
+
+function renderGoalCard(ctx) {
+  const month = ctx.today.slice(0, 7);
+  const goal = ctx.store.getGoalFor(month);
+
+  return `
+    <section class="card">
+      <div class="card-header">
+        <div>
+          <h2>Meta del mes</h2>
+          <p>Cuánto quieres vender y hasta dónde dejar los gastos. El Inicio y el corte mensual muestran tu avance.</p>
+        </div>
+        <span class="stat-icon">${icon('calendar')}</span>
+      </div>
+
+      ${goal
+        ? notice({
+            tone: 'info',
+            iconName: 'chart',
+            title: `Meta de ${monthLabel(month)}`,
+            text: `Vender ${goal.salesGoal > 0 ? '$' + goal.salesGoal : '—'}${goal.expenseCap > 0 ? ` y no pasar de $${goal.expenseCap} de gastos` : ''}.`
+          })
+        : ''}
+
+      <form id="goal-form" novalidate>
+        <div class="form-grid">
+          <div class="field">
+            <label for="goal-month">Mes de la meta</label>
+            <input id="goal-month" name="month" type="month" required value="${goal?.month ?? month}">
+          </div>
+          <div class="field">
+            <label for="goal-sales">¿Cuánto quieres vender?</label>
+            <div class="input-suffix-wrap">
+              <input id="goal-sales" name="salesGoal" type="number" inputmode="decimal"
+                min="0" step="0.01" placeholder="Ej. 40000"
+                value="${goal?.salesGoal ? String(goal.salesGoal) : ''}">
+              <span class="input-suffix">MXN</span>
+            </div>
+            <span class="field-help">El total de ventas del mes que quieres lograr.</span>
+          </div>
+          <div class="field">
+            <label for="goal-expenses">Tope de gastos</label>
+            <div class="input-suffix-wrap">
+              <input id="goal-expenses" name="expenseCap" type="number" inputmode="decimal"
+                min="0" step="0.01" placeholder="Ej. 8000"
+                value="${goal?.expenseCap ? String(goal.expenseCap) : ''}">
+              <span class="input-suffix">MXN</span>
+            </div>
+            <span class="field-help">Sin contar compras de insumos ni tus retiros. Puedes dejar solo una de las dos.</span>
+          </div>
+        </div>
+        <div class="form-actions">
+          <button class="button button-primary" type="submit">${icon('check')} Guardar meta</button>
+          ${goal
+            ? '<button class="button button-small button-danger" type="button" data-delete-goal>Quitar meta</button>'
+            : ''}
+        </div>
+      </form>
+    </section>
+  `;
+}
 
 function renderFamilyCard(ctx) {
   const familyCode = ctx.snapshot.familyCode;
@@ -257,6 +340,118 @@ function renderFirebaseCard(ctx) {
   `;
 }
 
+function renderBackupCard(ctx) {
+  const familyCode = ctx.snapshot.familyCode;
+  const lastBackupRaw = readLastBackupDate(familyCode);
+  const daysAgo = lastBackupRaw
+    ? daysBetweenDates(lastBackupRaw.slice(0, 10), ctx.today)
+    : null;
+  const isStale = daysAgo !== null && daysAgo > 30;
+
+  const lastBackupLine = daysAgo === null
+    ? 'Todavía no has descargado un respaldo en este teléfono.'
+    : daysAgo <= 0
+      ? 'Último respaldo: hoy. 👌'
+      : `Último respaldo: hace ${daysAgo} día${daysAgo === 1 ? '' : 's'} (${formatDateShort(lastBackupRaw.slice(0, 10))}).`;
+
+  const staleNotice = isStale
+    ? notice({
+        tone: 'warning',
+        iconName: 'alert',
+        title: 'Ya pasaron más de 30 días sin respaldo',
+        text: 'Si pierdes el teléfono o borras la familia, no habrá vuelta atrás. Descarga un respaldo nuevo y guárdalo en un lugar seguro.'
+      })
+    : '';
+
+  const restore = ctx.state.backupRestore ?? null;
+  let restorePreview = '';
+
+  if (restore?.error) {
+    restorePreview = notice({
+      tone: 'danger',
+      iconName: 'alert',
+      title: 'El respaldo no se puede leer',
+      text: restore.error
+    });
+  } else if (restore?.backup) {
+    const summary = restore.summary;
+    const mismatch = !isSameFamily(restore.backup, familyCode);
+    restorePreview = `
+      ${notice({
+        tone: 'info',
+        iconName: 'download',
+        title: 'Revisa antes de restaurar',
+        text: backupSummaryText(summary) + ' Restaurar no borra nada: si un registro ya existe, se actualiza; si no existe, se agrega.'
+      })}
+      ${mismatch
+        ? `${notice({
+            tone: 'warning',
+            iconName: 'alert',
+            title: `Este respaldo es de otra familia (${escapeHtml(restore.backup.familyCode)})`,
+            text: `Tus datos actuales son de la familia ${escapeHtml(familyCode)}. Si restauras, los registros del respaldo se mezclarán con los tuyos. Solamente continúa si estás seguro de que es lo que quieres.`
+          })}
+          <div class="field field-check">
+            <label for="backup-family-confirm">
+              <input id="backup-family-confirm" type="checkbox" data-backup-family-confirm>
+              <span>Sí, quiero restaurar registros de la familia ${escapeHtml(restore.backup.familyCode)} en mi familia actual.</span>
+            </label>
+          </div>`
+        : ''}
+      <div class="button-row" style="margin-top:12px">
+        <button class="button button-primary" type="button" data-backup-restore ${mismatch ? 'disabled' : ''}>
+          ${icon('check')} Restaurar ${summary.count} registro${summary.count === 1 ? '' : 's'}
+        </button>
+      </div>
+    `;
+  }
+
+  return `
+    <section class="card">
+      <div class="card-header">
+        <div>
+          <h2>Respaldo de tus datos</h2>
+          <p>Descarga un archivo con todo tu historial y guárdalo en un lugar seguro. Es tu red de seguridad.</p>
+        </div>
+        <span class="stat-icon">${icon('download')}</span>
+      </div>
+
+      <p class="field-help">${escapeHtml(lastBackupLine)}</p>
+      ${staleNotice}
+
+      <div class="button-row" style="margin-top:12px">
+        <button class="button button-primary" type="button" data-backup-download>
+          ${icon('download')} Descargar respaldo
+        </button>
+      </div>
+
+      <details class="disclosure" style="margin-top:16px">
+        <summary>Restaurar un respaldo (si perdiste datos)</summary>
+        <div>
+          <p class="field-help">
+            Usa el archivo que descargaste antes. Primero la app te muestra qué contiene y tú confirmas.
+            Restaurar <strong>nunca borra</strong> lo que ya tienes.
+          </p>
+          <form id="backup-restore-form" novalidate>
+            <div class="field">
+              <label for="backup-file">Archivo del respaldo (.json)</label>
+              <input id="backup-file" type="file" accept=".json,application/json">
+            </div>
+            <div class="field">
+              <label for="backup-text">…o pega aquí el texto del respaldo</label>
+              <textarea id="backup-text" name="backupText" spellcheck="false"
+                placeholder="Pega aquí el contenido del archivo si lo abriste como texto"></textarea>
+            </div>
+            <div class="form-actions">
+              <button class="button" type="submit">${icon('clipboard')} Revisar respaldo</button>
+            </div>
+          </form>
+          <div style="margin-top:12px" data-backup-preview>${restorePreview}</div>
+        </div>
+      </details>
+    </section>
+  `;
+}
+
 function renderInstallCard(ctx) {
   const canInstall = Boolean(ctx.state.installPrompt);
   return `
@@ -339,6 +534,8 @@ export function render(ctx) {
     <div class="settings-grid">
       ${renderFamilyCard(ctx)}
       ${renderStatusCard(ctx)}
+      ${renderGoalCard(ctx)}
+      ${renderBackupCard(ctx)}
       ${renderFirebaseCard(ctx)}
       ${renderInstallCard(ctx)}
       ${renderAboutCard()}
@@ -348,6 +545,96 @@ export function render(ctx) {
 
 export function bind(root, ctx) {
   const familyCode = ctx.snapshot.familyCode;
+
+  root.querySelector('[data-backup-download]')?.addEventListener('click', async () => {
+    try {
+      const backup = buildBackup(familyCode, ctx.store.records);
+      downloadJson(`nuvy-respaldo-${familyCode}-${ctx.today}.json`, backup);
+      saveLastBackupDate(familyCode, backup.exportedAt);
+      ctx.toast(
+        `Respaldo descargado con ${backup.records.length} registro${backup.records.length === 1 ? '' : 's'}. Guárdalo en un lugar seguro.`,
+        'success'
+      );
+      ctx.refresh();
+    } catch (error) {
+      ctx.toast(error?.message ?? 'No se pudo crear el respaldo.', 'danger');
+    }
+  });
+
+  const restoreForm = root.querySelector('#backup-restore-form');
+  if (restoreForm) {
+    const fileInput = root.querySelector('#backup-file');
+
+    const reviewText = (text) => {
+      try {
+        const backup = parseBackup(text);
+        ctx.state.backupRestore = {
+          backup,
+          summary: summarizeBackup(backup),
+          confirmed: false
+        };
+        ctx.refresh();
+      } catch (error) {
+        ctx.state.backupRestore = { error: error?.message ?? 'No se pudo leer el respaldo.' };
+        ctx.refresh();
+      }
+    };
+
+    if (fileInput) {
+      fileInput.addEventListener('change', () => {
+        const file = fileInput.files?.[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = () => reviewText(String(reader.result ?? ''));
+        reader.onerror = () => {
+          ctx.state.backupRestore = { error: 'No se pudo leer el archivo. Intenta pegar su contenido como texto.' };
+          ctx.refresh();
+        };
+        reader.readAsText(file);
+      });
+    }
+
+    restoreForm.addEventListener('submit', (event) => {
+      event.preventDefault();
+      const text = restoreForm.elements.namedItem('backupText')?.value ?? '';
+      if (!text.trim()) {
+        ctx.state.backupRestore = { error: 'Elige el archivo del respaldo o pega su texto primero.' };
+        ctx.refresh();
+        return;
+      }
+      reviewText(text);
+    });
+
+    const confirmCheckbox = root.querySelector('[data-backup-family-confirm]');
+    confirmCheckbox?.addEventListener('change', () => {
+      const restoreButton = root.querySelector('[data-backup-restore]');
+      if (restoreButton) restoreButton.disabled = !confirmCheckbox.checked;
+    });
+
+    root.querySelector('[data-backup-restore]')?.addEventListener('click', async () => {
+      const restore = ctx.state.backupRestore;
+      if (!restore?.backup) return;
+      const count = restore.backup.records.length;
+      if (!confirmDelete(
+        `¿Restaurar ${count} registro${count === 1 ? '' : 's'}? Nada se borra: los registros que ya existen se actualizan y los nuevos se agregan.`
+      )) {
+        return;
+      }
+      try {
+        await ctx.store.migrate(restore.backup.records);
+        ctx.state.backupRestore = null;
+        ctx.toast(
+          count === 0
+            ? 'El respaldo estaba vacío; no había nada que restaurar.'
+            : `Listo: ${count} registro${count === 1 ? '' : 's'} restaurado${count === 1 ? '' : 's'}.`,
+          'success'
+        );
+        ctx.refresh();
+      } catch (error) {
+        ctx.toast(error?.message ?? 'No se pudo restaurar el respaldo.', 'danger');
+      }
+    });
+  }
 
   root.querySelector('[data-copy-code]')?.addEventListener('click', async () => {
     const ok = await copyToClipboard(familyCode);
@@ -385,8 +672,36 @@ export function bind(root, ctx) {
     window.location.reload();
   });
 
-  const joinForm = root.querySelector('#join-family-form');
-  if (joinForm) {
+  const goalForm = root.querySelector('#goal-form');
+  if (goalForm) {
+    handleSubmit(goalForm, async () => {
+      const values = readForm(goalForm);
+      await ctx.store.setGoal({
+        month: values.month,
+        // Los campos vacíos cuentan como cero: con eso la validación exige
+        // que al menos uno de los dos tenga número.
+        salesGoal: values.salesGoal === '' ? 0 : values.salesGoal,
+        expenseCap: values.expenseCap === '' ? 0 : values.expenseCap
+      });
+      ctx.toast('Meta guardada.', 'success');
+      ctx.refresh();
+    });
+
+    root.querySelector('[data-delete-goal]')?.addEventListener('click', async () => {
+      const goal = ctx.store.getGoalFor(ctx.today.slice(0, 7));
+      if (!goal) return;
+      if (!confirmDelete('¿Quitar la meta de este mes? Los datos de ventas y gastos no se tocan.')) return;
+      try {
+        await ctx.store.deleteRecord(goal.id);
+        ctx.toast('Meta quitada.', 'success');
+        ctx.refresh();
+      } catch (error) {
+        ctx.toast(error?.message ?? 'No se pudo quitar la meta.', 'danger');
+      }
+    });
+  }
+
+  const joinForm = root.querySelector('#join-family-form');  if (joinForm) {
     handleSubmit(joinForm, async () => {
       const raw = joinForm.elements.namedItem('familyCode').value;
       const normalized = normalizeFamilyCode(raw);

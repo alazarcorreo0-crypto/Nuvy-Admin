@@ -1780,6 +1780,338 @@ details.disclosure > div {
   }
 }
 
+/* ── Casilla de confirmación (respaldo de otra familia) ──────────────────── */
+
+.field-check {
+  margin-top: 12px;
+}
+
+.field-check label {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px 14px;
+  background: var(--amber-soft);
+  border: 1px solid var(--amber);
+  border-radius: 12px;
+  font-size: 0.86rem;
+  font-weight: 650;
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.field-check input[type="checkbox"] {
+  width: 20px;
+  height: 20px;
+  margin-top: 1px;
+  accent-color: var(--brand);
+  flex-shrink: 0;
+}
+
+/* ── Botón dentro de un toast (Deshacer) ────────────────────────────────── */
+
+.toast .toast-action {
+  margin-left: 4px;
+  padding: 6px 14px;
+  color: var(--ink);
+  background: white;
+  border: none;
+  border-radius: 999px;
+  font-size: 0.8rem;
+  font-weight: 800;
+  flex-shrink: 0;
+}
+
+.toast .toast-action:hover {
+  background: var(--brand-soft);
+}
+
+.toast {
+  pointer-events: auto;
+}
+
+/* ── Filtros y búsqueda ──────────────────────────────────────────────────── */
+
+.filter-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: flex-end;
+  padding: 14px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-sm);
+}
+
+.filter-bar .field {
+  margin: 0;
+  min-width: 0;
+}
+
+.filter-bar .field input,
+.filter-bar .field select {
+  min-height: 42px;
+}
+
+.filter-field-date {
+  flex: 1 1 130px;
+}
+
+.filter-field-select {
+  flex: 1 1 160px;
+}
+
+.filter-field-search {
+  flex: 2 1 180px;
+}
+
+.chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  width: 100%;
+}
+
+.chip {
+  padding: 8px 14px;
+  background: var(--surface-2);
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  color: var(--ink-soft);
+  font-size: 0.78rem;
+  font-weight: 750;
+}
+
+.chip:hover {
+  background: var(--brand-soft);
+  border-color: var(--brand);
+  color: var(--brand-strong);
+}
+
+.chip.is-active {
+  background: var(--brand);
+  border-color: var(--brand);
+  color: white;
+}
+
+.filter-count {
+  align-self: center;
+  margin-left: auto;
+  color: var(--muted);
+  font-size: 0.76rem;
+  font-weight: 700;
+}
+
+/* ── Comparación contra la semana anterior ───────────────────────────────── */
+
+.compare-list {
+  display: grid;
+  gap: 10px;
+}
+
+.compare-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 12px 14px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+}
+
+.compare-row .compare-label {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.compare-row .compare-label strong {
+  font-size: 0.86rem;
+}
+
+.compare-row .compare-label span {
+  color: var(--muted);
+  font-size: 0.76rem;
+}
+
+.compare-row .compare-value {
+  text-align: right;
+}
+
+.compare-row .compare-value strong {
+  display: block;
+  font-size: 0.98rem;
+}
+
+.compare-delta {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.74rem;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.compare-delta .icon {
+  width: 13px;
+  height: 13px;
+}
+
+.compare-delta.is-good {
+  color: var(--success);
+}
+
+.compare-delta.is-bad {
+  color: var(--danger);
+}
+
+.compare-delta.is-neutral {
+  color: var(--muted);
+}
+
+.compare-empty {
+  padding: 12px 14px;
+  color: var(--muted);
+  background: var(--surface-2);
+  border: 1px dashed var(--line-strong);
+  border-radius: 14px;
+  font-size: 0.82rem;
+  text-align: center;
+}
+
+/* ── Barra de avance (meta mensual) ─────────────────────────────────────── */
+
+.progress-block {
+  padding: 16px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+
+.progress-block + .progress-block {
+  margin-top: 10px;
+}
+
+.progress-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.progress-head strong {
+  font-size: 0.88rem;
+}
+
+.progress-head span {
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.progress-track {
+  height: 14px;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--mint), var(--brand));
+  border-radius: 999px;
+  transition: width 0.3s ease;
+}
+
+.progress-fill.is-over {
+  background: linear-gradient(90deg, var(--amber), var(--berry));
+}
+
+.progress-foot {
+  margin-top: 8px;
+  color: var(--ink-soft);
+  font-size: 0.78rem;
+}
+
+/* ── Simulador de precio ────────────────────────────────────────────────── */
+
+.sim-note {
+  margin-top: 10px;
+  padding: 10px 12px;
+  background: var(--surface-2);
+  border: 1px dashed var(--line-strong);
+  border-radius: 12px;
+  color: var(--muted);
+  font-size: 0.76rem;
+}
+
+/* ── Desglose de la compra sugerida ─────────────────────────────────────── */
+
+.suggestion-breakdown {
+  display: block;
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 0.76rem;
+}
+
+/* ── Aviso de conteo precargado ─────────────────────────────────────────── */
+
+.prefill-note {
+  color: var(--amber);
+  font-weight: 750;
+}
+
+/* ── Cierre de caja ─────────────────────────────────────────────────────── */
+
+.cashclose-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 14px;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  font-size: 0.82rem;
+}
+
+.cashclose-item + .cashclose-item {
+  margin-top: 8px;
+}
+
+.cashclose-item strong {
+  font-size: 0.86rem;
+}
+
+.cashclose-diff {
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.cashclose-diff.is-missing {
+  color: var(--danger);
+}
+
+.cashclose-diff.is-extra {
+  color: var(--success);
+}
+
+.cashclose-diff.is-zero {
+  color: var(--muted);
+}
+
+/* ── Respaldo: vista previa ─────────────────────────────────────────────── */
+
+[data-backup-preview] .notice {
+  margin-bottom: 10px;
+}
+
 /* ── Responsive ─────────────────────────────────────────────────────────── */
 
 @media (max-width: 900px) {

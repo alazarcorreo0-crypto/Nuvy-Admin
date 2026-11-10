@@ -58,6 +58,19 @@
           "type": "image/png"
         }
       ]
+    },
+    {
+      "name": "Corte mensual",
+      "short_name": "Mensual",
+      "description": "Ver cómo va el mes contra tu meta",
+      "url": "./#mensual",
+      "icons": [
+        {
+          "src": "./icons/icon-192.png",
+          "sizes": "192x192",
+          "type": "image/png"
+        }
+      ]
     }
   ]
 }

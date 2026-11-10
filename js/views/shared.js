@@ -89,6 +89,27 @@ export function confirmDelete(message = '¿Borrar este registro? Esta acción no
 }
 
 /**
+ * Borra un registro y ofrece "Deshacer" durante 10 segundos. Si la persona
+ * lo presiona, el registro regresa exactamente como estaba (mismo id y
+ * fechas, para que la sincronización entre teléfonos lo reconozca).
+ */
+export async function deleteWithUndo(ctx, record, message = 'Registro borrado.') {
+  await ctx.store.deleteRecord(record.id);
+  ctx.refresh();
+  ctx.toast(message, 'success', {
+    duration: 10000,
+    action: {
+      label: 'Deshacer',
+      onClick: async () => {
+        await ctx.store.restoreRecord(record);
+        ctx.toast('Listo: quedó como estaba.', 'success');
+        ctx.refresh();
+      }
+    }
+  });
+}
+
+/**
  * Descarga una tabla de datos como CSV compatible con Excel y Google Sheets.
  * - Incluye BOM para que Excel lea bien acentos y eñes.
  * - Celda vacía cuando el valor es null o undefined.
@@ -105,7 +126,18 @@ export function downloadCsv(filename, headers, rows) {
     row.map(escapeCell).join(',')
   );
   const csv = `\uFEFF${lines.join('\r\n')}`;
-  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+  downloadFile(filename, csv, 'text/csv;charset=utf-8');
+}
+
+/**
+ * Descarga un objeto como archivo JSON (para el respaldo completo).
+ */
+export function downloadJson(filename, data) {
+  downloadFile(filename, JSON.stringify(data, null, 2), 'application/json;charset=utf-8');
+}
+
+function downloadFile(filename, content, mimeType) {
+  const blob = new Blob([content], { type: mimeType });
   const url = URL.createObjectURL(blob);
   const link = document.createElement('a');
   link.href = url;

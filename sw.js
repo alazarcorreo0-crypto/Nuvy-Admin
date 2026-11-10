@@ -10,7 +10,7 @@
  * Cuando publiques cambios importantes, sube el número de VERSION.
  */
 
-const VERSION = 'nuvy-admin-v1.0.5';
+const VERSION = 'nuvy-admin-v1.1.0';
 
 const APP_SHELL = [
   './',
@@ -25,6 +25,8 @@ const APP_SHELL = [
   './js/core/validation.js',
   './js/core/inventory.js',
   './js/core/weekly-cut.js',
+  './js/core/monthly-cut.js',
+  './js/core/backup.js',
   './js/services/settings-store.js',
   './js/services/local-adapter.js',
   './js/services/firestore-adapter.js',
@@ -32,6 +34,7 @@ const APP_SHELL = [
   './js/ui/icons.js',
   './js/ui/components.js',
   './js/views/shared.js',
+  './js/views/filters.js',
   './js/views/inicio.js',
   './js/views/insumos.js',
   './js/views/compras.js',
@@ -39,6 +42,7 @@ const APP_SHELL = [
   './js/views/gastos.js',
   './js/views/inventario.js',
   './js/views/corte.js',
+  './js/views/mensual.js',
   './js/views/ajustes.js',
   './vendor/firebase/firebase-app.js',
   './vendor/firebase/firebase-firestore.js',

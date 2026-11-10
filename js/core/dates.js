@@ -88,6 +88,20 @@ export function formatDateShort(dateString) {
   }).format(parseDate(dateString));
 }
 
+/**
+ * Fecha con día, mes y año largos, sin día de la semana:
+ * "1 de agosto de 2026". Útil para avisos.
+ */
+export function formatDateMonthYear(dateString) {
+  if (!isValidDateString(dateString)) return '—';
+  return new Intl.DateTimeFormat('es-MX', {
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+    timeZone: 'UTC'
+  }).format(parseDate(dateString));
+}
+
 export function formatDateCompact(dateString) {
   if (!isValidDateString(dateString)) return '—';
   return new Intl.DateTimeFormat('es-MX', {
@@ -105,6 +119,25 @@ export function formatWeekRange(start, end) {
 export function capitalizeFirst(value) {
   const text = String(value ?? '');
   return text ? text.charAt(0).toUpperCase() + text.slice(1) : text;
+}
+
+/**
+ * Días que tiene el mes de una fecha (28 a 31).
+ */
+export function daysInMonth(dateString) {
+  if (!isValidDateString(dateString)) return 30;
+  const date = parseDate(dateString);
+  return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth() + 1, 0)).getUTCDate();
+}
+
+/**
+ * Días completos entre dos fechas de calendario (positivo si "to" es
+ * posterior a "from"). Devuelve null si alguna fecha no es válida.
+ */
+export function daysBetweenDates(from, to) {
+  if (!isValidDateString(from) || !isValidDateString(to)) return null;
+  const ms = parseDate(to).getTime() - parseDate(from).getTime();
+  return Math.round(ms / 86400000);
 }
 
 export function lastDate(dates) {

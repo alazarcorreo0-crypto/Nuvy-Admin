@@ -27,6 +27,7 @@ import * as compras from './views/compras.js';
 import * as inventario from './views/inventario.js';
 import * as insumos from './views/insumos.js';
 import * as corte from './views/corte.js';
+import * as mensual from './views/mensual.js';
 import * as ajustes from './views/ajustes.js';
 
 const NAV_ITEMS = [
@@ -80,6 +81,13 @@ const NAV_ITEMS = [
     subtitle: 'Ganancia real'
   },
   {
+    id: 'mensual',
+    label: 'Corte mensual',
+    icon: 'calendar',
+    title: 'Corte mensual',
+    subtitle: 'Cómo va el mes'
+  },
+  {
     id: 'ajustes',
     label: 'Ajustes',
     icon: 'settings',
@@ -98,6 +106,7 @@ const VIEW_MODULES = {
   inventario,
   insumos,
   corte,
+  mensual,
   ajustes
 };
 
@@ -111,7 +120,12 @@ const state = {
   installPrompt: null,
   editingSupplyId: null,
   editingPurchaseId: null,
+  editingSaleId: null,
+  editingExpenseId: null,
   corteDate: null,
+  mensualMonth: null,
+  backupRestore: null,
+  viewFilters: {},
   pendingRender: false,
   cloudFallback: false,
   retryingCloud: false
@@ -279,6 +293,8 @@ function navigate(view) {
   const target = VIEW_MODULES[view] ? view : 'inicio';
   state.editingSupplyId = null;
   state.editingPurchaseId = null;
+  state.editingSaleId = null;
+  state.editingExpenseId = null;
   closeDrawer();
 
   if (window.location.hash === `#${target}`) {
@@ -297,6 +313,8 @@ function handleRoute() {
     state.view = next;
     state.editingSupplyId = null;
     state.editingPurchaseId = null;
+    state.editingSaleId = null;
+    state.editingExpenseId = null;
   }
   closeDrawer();
   renderView();
@@ -321,14 +339,40 @@ function hideLoading() {
   dom.loadingScreen?.classList.add('hidden');
 }
 
-function toast(message, tone = 'default') {
+function toast(message, tone = 'default', options = {}) {
   if (!dom.toastContainer) return;
   const element = document.createElement('div');
   element.className = `toast toast-${tone}`;
   const iconName = tone === 'success' ? 'check' : tone === 'danger' || tone === 'warning' ? 'alert' : 'info';
   element.innerHTML = `${icon(iconName)}<span>${escapeHtml(message)}</span>`;
+
+  // Un toast con botón (por ejemplo "Deshacer") dura más y se va solo
+  // al terminar el tiempo o al hacer clic en el botón.
+  let removeTimer = null;
+  const remove = () => {
+    window.clearTimeout(removeTimer);
+    element.remove();
+  };
+
+  const action = options?.action;
+  if (action?.label && typeof action?.onClick === 'function') {
+    const actionButton = document.createElement('button');
+    actionButton.type = 'button';
+    actionButton.className = 'toast-action';
+    actionButton.textContent = String(action.label);
+    actionButton.addEventListener('click', async () => {
+      remove();
+      try {
+        await action.onClick();
+      } catch (error) {
+        toast(error?.message ?? 'No se pudo completar la acción.', 'danger');
+      }
+    });
+    element.appendChild(actionButton);
+  }
+
   dom.toastContainer.appendChild(element);
-  window.setTimeout(() => element.remove(), 4200);
+  removeTimer = window.setTimeout(remove, options?.duration ?? 4200);
 }
 
 async function installApp() {

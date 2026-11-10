@@ -47,5 +47,19 @@ export const APP_CONFIG = {
    */
   defaultFamilyCode: '',
 
-  appVersion: '1.0.5'
+  /**
+   * Food cost: qué porcentaje del costo del producto sobre las ventas se
+   * considera bien (verde) y hasta dónde se acepta como advertencia
+   * (ámbar). Más arriba de warning se muestra en rojo.
+   */
+  foodCostGoodPercent: 30,
+  foodCostWarningPercent: 38,
+
+  /**
+   * Colchón de la compra sugerida: la app sugiere consumir el consumo de
+   * la semana más este porcentaje, menos el inventario que quedó.
+   */
+  purchaseCushionPercent: 10,
+
+  appVersion: '1.1.0'
 };

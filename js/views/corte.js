@@ -8,6 +8,10 @@ import {
 import { baseQuantity, cost, money, number, purchaseQuantity } from '../core/format.js';
 import { getPurchaseUnitLabel } from '../core/units.js';
 import {
+  buildWeekComparison
+} from '../core/weekly-cut.js';
+import { APP_CONFIG } from '../config.js';
+import {
   emptyState,
   escapeHtml,
   notice,
@@ -20,6 +24,30 @@ function anchorDate(ctx) {
   return isValidDateString(ctx.state.corteDate)
     ? ctx.state.corteDate
     : ctx.today;
+}
+
+function percent(value, decimals = 1) {
+  if (value === null || value === undefined || !Number.isFinite(Number(value))) {
+    return '—';
+  }
+  return `${number(Number(value) * 100, decimals)}%`;
+}
+
+/**
+ * Color del food cost según los umbrales de config.js:
+ * verde hasta 30%, ámbar hasta 38%, rojo arriba de eso.
+ */
+function foodCostTone(pct) {
+  if (pct === null) return 'default';
+  const value = pct * 100;
+  if (value <= APP_CONFIG.foodCostGoodPercent) return 'success';
+  if (value <= APP_CONFIG.foodCostWarningPercent) return 'warning';
+  return 'danger';
+}
+
+function expenseRatioTone(pct) {
+  if (pct === null) return 'default';
+  return pct * 100 <= 50 ? 'success' : 'warning';
 }
 
 function renderWeekToolbar(ctx, cut) {
@@ -42,8 +70,9 @@ function renderSummary(cut) {
   const profitTone = cut.complete && cut.profit < 0 ? ' is-negative' : '';
   const profitValue = cut.complete ? money(cut.profit) : '—';
   const profitDetail = cut.complete
-    ? 'Ventas − gastos − costo del insumo consumido'
+    ? 'Ventas − gastos − costo de lo consumido (lo vendido y la merma)'
     : 'Falta el conteo final de algunos insumos';
+  const cashTone = cut.cashFlow.remaining < 0 ? ' is-negative' : '';
   return `
     <section class="cut-hero">
       <p class="eyebrow" style="color:rgba(255,255,255,.78)">Corte semanal</p>
@@ -51,13 +80,22 @@ function renderSummary(cut) {
       <p>El consumo se calcula con inventario inicial + compras de la semana − inventario final. Las ventas no descuentan inventario.</p>
 
       <div class="cut-summary">
-        <article class="stat-card cut-profit${profitTone}">
+        <article class="stat-card cut-profit">
           <div class="stat-top">
-            <span class="stat-label">Ganancia real de la semana</span>
+            <span class="stat-label">Ganancia contable de la semana</span>
             <span class="stat-icon">${icon('chart')}</span>
           </div>
-          <strong class="stat-value">${profitValue}</strong>
-          <span class="stat-detail">${profitDetail}</span>
+          <strong class="stat-value${profitTone}">${profitValue}</strong>
+          <span class="stat-detail">${profitDetail}. No cuenta el dinero de las compras ni los retiros: eso es inventario y tu sueldo, no ganancia.</span>
+        </article>
+
+        <article class="stat-card cut-profit">
+          <div class="stat-top">
+            <span class="stat-label">Dinero que te queda en la caja</span>
+            <span class="stat-icon">${icon('cash')}</span>
+          </div>
+          <strong class="stat-value${cashTone}">${money(cut.cashFlow.remaining)}</strong>
+          <span class="stat-detail">Ventas ${money(cut.cashFlow.salesIn)} − gastos pagados ${money(cut.cashFlow.expensesPaid)} − compras ${money(cut.cashFlow.purchasesPaid)}${cut.cashFlow.ownerWithdrawals > 0 ? ` − retiros del dueño ${money(cut.cashFlow.ownerWithdrawals)}` : ''}. Es lo que de verdad salió y entró de efectivo, sin importar cuándo se consume.</span>
         </article>
       </div>
 
@@ -67,6 +105,16 @@ function renderSummary(cut) {
 }
 
 function renderTotals(cut) {
+  const foodCost = cut.foodCostPct;
+  const foodCostValue = foodCost === null ? '—' : percent(foodCost);
+  const foodCostDetail = foodCost === null
+    ? 'Registra los conteos para saber cuánto producto vendiste'
+    : `De cada $100 que vendes, $${number(foodCost * 100, 0)} se van en la base y los toppings. Menos de ${APP_CONFIG.foodCostGoodPercent}% está bien; más de ${APP_CONFIG.foodCostWarningPercent}% es mucho.`;
+  const expenseRatio = cut.expenseRatioPct;
+  const expenseRatioDetail = expenseRatio === null
+    ? 'Sin ventas esta semana'
+    : `De cada $100 que vendes, $${number(expenseRatio * 100, 0)} se van en gastos (fijos y variables, con la parte de los recurrentes).`;
+
   return `
     <section class="section">
       <div class="stats-grid">
@@ -80,7 +128,7 @@ function renderTotals(cut) {
         ${statCard({
           label: 'Gastos de la semana',
           value: money(cut.totalExpenses),
-          detail: `Fijos ${money(cut.totalFixedExpenses)} · Variables ${money(cut.totalVariableExpenses)}`,
+          detail: `Fijos ${money(cut.totalFixedExpenses)} · Variables ${money(cut.totalVariableExpenses)}${cut.totalProratedOwnerWithdrawals > 0 ? ' · Sin los retiros del dueño' : ''}`,
           tone: 'danger',
           iconName: 'receipt'
         })}
@@ -109,6 +157,124 @@ function renderTotals(cut) {
           tone: 'default',
           iconName: 'box'
         })}
+        ${statCard({
+          label: 'Retiros del dueño',
+          value: money(cut.cashFlow.ownerWithdrawals),
+          detail: cut.cashFlow.ownerWithdrawals > 0
+            ? 'No son un gasto del negocio: salen de la caja y de tu ganancia personal'
+            : 'Sin retiros esta semana',
+          tone: 'default',
+          iconName: 'download'
+        })}
+        ${statCard({
+          label: 'Food cost',
+          value: foodCostValue,
+          detail: foodCostDetail,
+          tone: foodCostTone(foodCost),
+          iconName: 'scale'
+        })}
+        ${statCard({
+          label: 'Gastos entre ventas',
+          value: expenseRatio === null ? '—' : percent(expenseRatio),
+          detail: expenseRatioDetail,
+          tone: expenseRatioTone(expenseRatio),
+          iconName: 'receipt'
+        })}
+        ${statCard({
+          label: 'Ticket promedio',
+          value: cut.tickets.hasTicketData ? money(cut.tickets.averageTicket) : '—',
+          detail: cut.tickets.hasTicketData
+            ? `${number(cut.tickets.totalTickets, 0)} clientes en ${cut.tickets.ticketSalesCount} venta${cut.tickets.ticketSalesCount === 1 ? '' : 's'} con clientes capturados`
+            : 'Captura los clientes del día en Ventas para verlo',
+          tone: 'info',
+          iconName: 'users'
+        })}
+        ${statCard({
+          label: 'Gramos por cliente',
+          value: cut.tickets.gramsPerCustomer !== null
+            ? baseQuantity(cut.tickets.gramsPerCustomer, 'g')
+            : '—',
+          detail: cut.tickets.gramsPerCustomer !== null
+            ? 'Producto servido por cliente (sin contar merma)'
+            : 'Se calcula con los clientes capturados en Ventas',
+          tone: 'info',
+          iconName: 'scale'
+        })}
+        ${cut.waste.hasWaste
+          ? statCard({
+              label: 'Costo de la merma',
+              value: money(cut.waste.totalWasteCost),
+              detail: `${baseQuantity(cut.waste.totalWasteBase, 'g')} perdidos (${baseQuantity(cut.waste.productWasteBase, 'g')} de producto y ${baseQuantity(cut.waste.supportWasteBase, 'g')} de apoyo)`,
+              tone: 'danger',
+              iconName: 'alert'
+            })
+          : ''}
+      </div>
+    </section>
+  `;
+}
+
+/**
+ * Comparación contra la semana anterior con deltas y porcentajes.
+ */
+function renderComparison(ctx, cut) {
+  const previous = ctx.store.getWeeklyCut(addDays(cut.start, -7));
+  const comparison = buildWeekComparison(cut, previous);
+
+  if (!comparison.hasPrevious) {
+    return `
+      <section class="section">
+        <div class="section-heading">
+          <div>
+            <h2>Comparado con la semana anterior</h2>
+            <p>Cómo te fue contra hace 7 días.</p>
+          </div>
+        </div>
+        ${notice({
+          tone: 'info',
+          iconName: 'chart',
+          title: 'Sin comparación',
+          text: 'La semana anterior no tiene ventas, gastos ni compras registradas. Cuando captures una semana más, aquí vas a ver si vas arriba o abajo.'
+        })}
+      </section>
+    `;
+  }
+
+  return `
+    <section class="section">
+      <div class="section-heading">
+        <div>
+          <h2>Comparado con la semana anterior</h2>
+          <p>Cómo te fue contra hace 7 días (${formatWeekRange(previous.start, previous.end)}).</p>
+        </div>
+      </div>
+      <div class="compare-list">
+        ${comparison.rows
+          .map((row) => {
+            const formatted = row.isMoney ? money(row.current) : baseQuantity(row.current, 'g');
+            const deltaText =
+              row.changeType === 'flat'
+                ? 'igual que la semana pasada'
+                : row.changeType === 'new'
+                  ? 'nuevo: la semana pasada fue cero'
+                  : `${row.diff >= 0 ? '+' : '−'}${row.isMoney ? money(Math.abs(row.diff)) : baseQuantity(Math.abs(row.diff), 'g')} (${row.pct >= 0 ? '+' : '−'}${percent(Math.abs(row.pct), 0)})`;
+            const arrow = row.changeType === 'changed' || row.changeType === 'new'
+              ? icon(row.diff >= 0 ? 'arrowRight' : 'arrowLeft')
+              : '';
+            return `
+              <div class="compare-row">
+                <div class="compare-label">
+                  <strong>${escapeHtml(row.label)}</strong>
+                  <span>${escapeHtml(row.hint)}</span>
+                </div>
+                <div class="compare-value">
+                  <strong>${formatted}</strong>
+                  <span class="compare-delta is-${row.tone}">${arrow} ${deltaText} vs semana anterior</span>
+                </div>
+              </div>
+            `;
+          })
+          .join('')}
       </div>
     </section>
   `;
@@ -174,14 +340,14 @@ function renderViability(cut) {
         ${statCard({
           label: 'Costo del producto por gramo',
           value: cost(v.costPerGram),
-          detail: `${baseQuantity(v.productConsumptionBase, 'g')} de mezcla consumidos (base + toppings; los líquidos cuentan 1 L como 1 kg)`,
+          detail: `${baseQuantity(v.productConsumptionBase, 'g')} de mezcla vendidos (base + toppings; los líquidos cuentan 1 L como 1 kg)`,
           tone: 'default',
           iconName: 'scale'
         })}
         ${statCard({
           label: 'Precio real por gramo',
           value: cost(v.effectivePricePerGram),
-          detail: 'Ventas ÷ gramos consumidos. Aproximado: asume que todo lo consumido se vendió.',
+          detail: 'Ventas ÷ gramos vendidos (sin contar la merma)',
           tone: 'info',
           iconName: 'cash'
         })}
@@ -196,11 +362,93 @@ function renderViability(cut) {
           label: 'Punto de equilibrio semanal',
           value: v.breakEvenSales !== null ? money(v.breakEvenSales) : '—',
           detail: v.breakEvenSales !== null
-            ? `Ventas mínimas para no perder${v.breakEvenGrams !== null ? ` (≈ ${number(v.breakEvenGrams / 1000)} kg)` : ''}. Cubre gastos fijos ${money(v.totalOverheads - cut.totalVariableExpenses - v.supportConsumptionCost)}, variables ${money(cut.totalVariableExpenses)} e insumos de apoyo ${money(v.supportConsumptionCost)}.`
+            ? `Ventas mínimas para no perder${v.breakEvenGrams !== null ? ` (≈ ${number(v.breakEvenGrams / 1000)} kg)` : ''}. Cubre gastos fijos ${money(cut.totalFixedExpenses)} + variables ${money(cut.totalVariableExpenses)} + insumos de apoyo ${money(v.supportConsumptionCost)} + merma ${money(cut.waste.totalWasteCost)} = ${money(v.totalOverheads)}.`
             : 'El costo del producto consume más de lo que se vende; no hay punto de equilibrio con estos números.',
           tone: 'warning',
           iconName: 'clipboard'
         })}
+      </div>
+
+      <p class="sim-note">
+        <strong>Sobre los gastos recurrentes:</strong> los gastos con periodo (cada semana, quincena o mes)
+        se cobran por día. Si tu renta es de $3,000 al mes, a una semana le toca
+        $3,000 × 7 ÷ 30 = $700, y al mes entero los $3,000 completos.
+        Así ninguna semana sale cara solo porque cayó la renta.
+      </p>
+    </section>
+  `;
+}
+
+/**
+ * Simulador de precio: con el costo por gramo de la semana, ayuda a decidir
+ * cuánto cobrar. Todo es una estimación, no se guarda nada.
+ */
+function renderPriceSimulator(cut) {
+  const v = cut.viability;
+  const hasData = v.hasProductData && v.costPerGram !== null;
+  const costValue = hasData ? v.costPerGram : 0.04;
+
+  return `
+    <section class="section no-print">
+      <div class="section-heading">
+        <div>
+          <h2>Simulador de precio</h2>
+          <p>¿Cuánto deberías cobrar? Mueve los números y la app te dice un precio estimado.</p>
+        </div>
+      </div>
+
+      <div class="card form-card">
+        <form id="simulator-form" novalidate>
+          <div class="form-grid">
+            <div class="field">
+              <label for="sim-cost">Costo por gramo</label>
+              <input id="sim-cost" name="simCost" type="number" step="0.0001" min="0" value="${costValue.toFixed(4)}" inputmode="decimal">
+            </div>
+            <div class="field">
+              <label for="sim-grams">Gramos por porción típica</label>
+              <input id="sim-grams" name="simGrams" type="number" step="1" min="1" value="100" inputmode="numeric">
+            </div>
+            <div class="field">
+              <label for="sim-margin">Margen que quieres (%)</label>
+              <input id="sim-margin" name="simMargin" type="number" step="1" min="0" max="99" value="65" inputmode="numeric">
+            </div>
+          </div>
+        </form>
+
+        <div class="stats-grid">
+          ${statCard({
+            label: 'Precio sugerido por porción',
+            value: '<span id="sim-price">—</span>',
+            detail: 'Costo ÷ (1 − margen). Estimación para decidir tu precio, no un precio oficial.',
+            tone: 'info',
+            iconName: 'sparkles'
+          })}
+          ${statCard({
+            label: 'Precio por 100 g',
+            value: '<span id="sim-price-100">—</span>',
+            detail: 'Para comparar contra competidores que venden por 100 g.',
+            tone: 'info',
+            iconName: 'scale'
+          })}
+          ${statCard({
+            label: 'Ganancia por porción',
+            value: '<span id="sim-profit">—</span>',
+            detail: 'Lo que te queda de cada porción vendida.',
+            tone: 'success',
+            iconName: 'chart'
+          })}
+          ${statCard({
+            label: 'Precio para cubrir todo',
+            value: '<span id="sim-fixed">—</span>',
+            detail: hasData
+              ? 'Precio por porción para cubrir el producto, los gastos de la semana y la merma vendiendo lo mismo que esta semana.'
+              : 'Sin conteos no se puede calcular. Registra conteos para verlo.',
+            tone: 'warning',
+            iconName: 'clipboard'
+          })}
+        </div>
+
+        <p class="sim-note">Estimación con los datos de esta semana. Los costos cambian cada semana según tus compras; revisa el precio cuando cambien.</p>
       </div>
     </section>
   `;
@@ -222,6 +470,14 @@ function renderRow(row) {
   const suggestedText = row.suggested === null
     ? '—'
     : purchaseQuantity(row.suggested, row.supply.purchaseUnit);
+  const wasteText = row.billableWasteBase === null
+    ? '—'
+    : row.billableWasteBase > 0
+      ? `${baseQuantity(row.billableWasteBase, row.baseUnit)} (${money(row.wasteCost)})`
+      : '0';
+  const soldText = row.soldBase === null
+    ? '—'
+    : baseQuantity(row.soldBase, row.baseUnit);
 
   return `
     <article class="cut-row">
@@ -256,6 +512,14 @@ function renderRow(row) {
           <strong>${consumptionText}</strong>
         </div>
         <div class="cut-cell">
+          <span>Merma</span>
+          <strong>${wasteText}</strong>
+        </div>
+        <div class="cut-cell">
+          <span>Consumo vendido</span>
+          <strong>${soldText}</strong>
+        </div>
+        <div class="cut-cell">
           <span>Costo del consumo</span>
           <strong>${costText}</strong>
         </div>
@@ -284,7 +548,7 @@ function renderSuggestions(cut) {
       tone: 'info',
       iconName: 'info',
       title: 'Sin compras sugeridas',
-      text: 'Con el consumo de esta semana no hace falta comprar más insumos, o todavía faltan conteos para calcularlo.'
+      text: 'Con el consumo de esta semana y lo que te quedó en inventario no hace falta comprar más, o todavía faltan conteos para calcularlo.'
     });
   }
 
@@ -297,6 +561,11 @@ function renderSuggestions(cut) {
               <div>
                 <strong>${escapeHtml(item.name)}</strong>
                 <span>Consumo de la semana: ${baseQuantity(item.consumptionBase, item.baseUnit)}</span>
+                <span class="suggestion-breakdown">
+                  Consumo ${baseQuantity(item.consumptionBase, item.baseUnit)} + ${item.cushionPercent}% de colchón
+                  − inventario final ${baseQuantity(item.stockBase, item.baseUnit)}
+                  → falta ${baseQuantity(item.neededBase, item.baseUnit)}
+                </span>
               </div>
               <div class="shopping-qty">${purchaseQuantity(item.quantity, item.unit)}</div>
             </div>
@@ -344,13 +613,15 @@ export function render(ctx) {
     ${noActivity || `
       ${renderSummary(cut)}
       ${renderTotals(cut)}
+      ${renderComparison(ctx, cut)}
       ${renderViability(cut)}
+      ${renderPriceSimulator(cut)}
 
       <section class="section">
         <div class="section-heading">
           <div>
             <h2>Detalle por insumo</h2>
-            <p>Inventario inicial + compras − inventario final = consumo.</p>
+            <p>Inventario inicial + compras − inventario final = consumo. La merma se resta para saber lo vendido.</p>
           </div>
         </div>
         ${cut.rows.map(renderRow).join('')}
@@ -360,7 +631,7 @@ export function render(ctx) {
         <div class="section-heading">
           <div>
             <h2>Compra sugerida para la próxima semana</h2>
-            <p>Se calcula con el consumo de esta semana. Las bolsas y piezas se redondean hacia arriba.</p>
+            <p>Se calcula con el consumo de esta semana más un colchón del ${cut.suggestions[0]?.cushionPercent ?? APP_CONFIG.purchaseCushionPercent}%, restando lo que te quedó. Las bolsas y piezas se redondean hacia arriba.</p>
           </div>
         </div>
         ${renderSuggestions(cut)}
@@ -369,9 +640,64 @@ export function render(ctx) {
   `;
 }
 
+/**
+ * Calcula los resultados del simulador con los valores actuales del
+ * formulario. No guarda nada: es solo para probar números.
+ */
+function runSimulator(root, cut) {
+  const costInput = root.querySelector('#sim-cost');
+  const gramsInput = root.querySelector('#sim-grams');
+  const marginInput = root.querySelector('#sim-margin');
+  const priceEl = root.querySelector('#sim-price');
+  const price100El = root.querySelector('#sim-price-100');
+  const profitEl = root.querySelector('#sim-profit');
+  const fixedEl = root.querySelector('#sim-fixed');
+  if (!costInput || !gramsInput || !marginInput) return;
+
+  const costPerGram = Number(costInput.value);
+  const grams = Number(gramsInput.value);
+  const marginPercent = Number(marginInput.value);
+
+  const valid =
+    Number.isFinite(costPerGram) &&
+    costPerGram > 0 &&
+    Number.isFinite(grams) &&
+    grams > 0 &&
+    Number.isFinite(marginPercent) &&
+    marginPercent >= 0 &&
+    marginPercent < 100;
+
+  if (!valid) {
+    priceEl.textContent = '—';
+    price100El.textContent = '—';
+    profitEl.textContent = '—';
+    fixedEl.textContent = '—';
+    return;
+  }
+
+  const divisor = 1 - marginPercent / 100;
+  const portionCost = costPerGram * grams;
+  const portionPrice = portionCost / divisor;
+  const pricePer100 = (costPerGram * 100) / divisor;
+
+  priceEl.textContent = money(portionPrice);
+  price100El.textContent = money(pricePer100);
+  profitEl.textContent = money(portionPrice - portionCost);
+
+  const soldBase = cut.viability?.productConsumptionBase ?? 0;
+  const soldCost = cut.viability?.productConsumptionCost ?? 0;
+  if (soldBase > 0) {
+    const perGramToCover = (soldCost + cut.viability.totalOverheads) / soldBase;
+    fixedEl.textContent = money(perGramToCover * grams);
+  } else {
+    fixedEl.textContent = '—';
+  }
+}
+
 export function bind(root, ctx) {
   const dateInput = root.querySelector('#cut-date');
   const anchor = anchorDate(ctx);
+  const cut = ctx.store.getWeeklyCut(anchor);
 
   dateInput?.addEventListener('change', () => {
     if (!isValidDateString(dateInput.value)) return;
@@ -401,4 +727,10 @@ export function bind(root, ctx) {
   root.querySelectorAll('[data-go]').forEach((button) => {
     button.addEventListener('click', () => ctx.navigate(button.dataset.go));
   });
+
+  const simulatorForm = root.querySelector('#simulator-form');
+  if (simulatorForm) {
+    runSimulator(root, cut);
+    simulatorForm.addEventListener('input', () => runSimulator(root, cut));
+  }
 }

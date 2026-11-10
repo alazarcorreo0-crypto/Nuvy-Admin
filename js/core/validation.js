@@ -127,20 +127,150 @@ export function validatePurchase(input, supply) {
 }
 
 export function validateSale(input) {
-  return {
+  const sale = {
     date: date(input.date),
     amount: decimal(input.amount, 'el monto vendido', { min: 0.01 })
   };
+
+  // Tickets (clientes) es opcional: entero mayor o igual a 1.
+  const rawTickets = input.tickets;
+  if (rawTickets !== undefined && rawTickets !== null && String(rawTickets).trim() !== '') {
+    const parsed = parseNumberInput(rawTickets);
+    if (!Number.isFinite(parsed) || !Number.isInteger(parsed) || parsed < 1) {
+      throw new ValidationError(
+        'Los clientes del día deben ser un número entero (1 o más).',
+        'tickets'
+      );
+    }
+    sale.tickets = parsed;
+  }
+
+  return sale;
 }
 
+export const EXPENSE_CATEGORIES = ['fixed', 'variable', 'owner'];
+
+/**
+ * Periodos de pago que puede tener un gasto recurrente.
+ * "once" (el comportamiento de siempre) es el que usan los gastos viejos.
+ */
+export const EXPENSE_PERIODS = ['once', 'weekly', 'fortnightly', 'monthly'];
+
+export const EXPENSE_PERIOD_LABELS = {
+  once: 'Una sola vez',
+  weekly: 'Cada semana',
+  fortnightly: 'Cada quincena',
+  monthly: 'Cada mes'
+};
+
 export function validateExpense(input) {
-  const category = input.category === 'fixed' ? 'fixed' : 'variable';
+  const category = EXPENSE_CATEGORIES.includes(input.category)
+    ? input.category
+    : 'variable';
+  const period = EXPENSE_PERIODS.includes(input.period) ? input.period : 'once';
   return {
     date: date(input.date),
     concept: text(input.concept, 'el concepto del gasto'),
     category,
-    amount: decimal(input.amount, 'el monto del gasto', { min: 0.01 })
+    amount: decimal(input.amount, 'el monto del gasto', { min: 0.01 }),
+    period
   };
+}
+
+/**
+ * Motivos de merma que se pueden registrar en Inventario.
+ */
+export const WASTE_REASONS = ['se derritió', 'se cayó', 'muestra', 'otro'];
+
+/**
+ * Merma de insumo: lo que se perdió y por qué. La cantidad se captura en
+ * la unidad que elija la persona (g, kg, bolsas…) y se convierte a la
+ * unidad base antes de guardarla.
+ */
+export function validateWaste(input, supply) {
+  if (!supply) {
+    throw new ValidationError('Elige un insumo.', 'supplyId');
+  }
+
+  const unit = String(input.unit ?? '');
+  const options = countUnitOptions(supply);
+  if (!options.some((option) => option.value === unit)) {
+    throw new ValidationError('Elige una unidad válida para este insumo.', 'unit');
+  }
+
+  const reason = WASTE_REASONS.includes(input.reason) ? input.reason : 'otro';
+
+  return {
+    date: date(input.date),
+    supplyId: supply.id,
+    quantity: decimal(input.quantity, 'la cantidad de merma', { min: 0.0001 }),
+    unit,
+    reason
+  };
+}
+
+/**
+ * Cierre de caja: el efectivo que quedó contado al terminar el día.
+ * `cardSales` es opcional y sirve para restar las ventas con tarjeta del
+ * efectivo esperado.
+ */
+export function validateCashClose(input) {
+  const close = {
+    date: date(input.date),
+    countedCash: decimal(input.countedCash, 'el efectivo contado', { min: 0 })
+  };
+
+  const rawCard = input.cardSales;
+  if (rawCard !== undefined && rawCard !== null && String(rawCard).trim() !== '') {
+    close.cardSales = decimal(rawCard, 'las ventas con tarjeta', { min: 0 });
+  }
+
+  const rawNote = String(input.note ?? '').trim();
+  if (rawNote) {
+    if (rawNote.length > 140) {
+      throw new ValidationError('La nota no puede tener más de 140 caracteres.');
+    }
+    close.note = rawNote;
+  }
+
+  return close;
+}
+
+function monthString(value, label) {
+  const clean = String(value ?? '').trim();
+  if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(clean)) {
+    throw new ValidationError(`Elige ${label} válido.`, 'month');
+  }
+  const year = Number(clean.slice(0, 4));
+  if (year < 2000 || year > 2100) {
+    throw new ValidationError('El mes está fuera de rango.', 'month');
+  }
+  return clean;
+}
+
+/**
+ * Meta del mes: cuánto quieres vender y hasta dónde puedes dejar los
+ * gastos. Ambas son opcionales entre sí, pero al menos una debe tener
+ * número.
+ */
+export function validateGoal(input) {
+  const month = monthString(input.month, 'un mes');
+  const salesGoal = decimal(input.salesGoal, 'la meta de ventas', {
+    min: 0,
+    max: 100_000_000
+  });
+  const expenseCap = decimal(input.expenseCap, 'el tope de gastos', {
+    min: 0,
+    max: 100_000_000
+  });
+
+  if (salesGoal <= 0 && expenseCap <= 0) {
+    throw new ValidationError(
+      'Escribe al menos una meta: cuánto quieres vender o hasta dónde pueden llegar los gastos.'
+    );
+  }
+
+  return { month, salesGoal, expenseCap };
 }
 
 /**
