@@ -35,6 +35,17 @@ function friendlyError(error) {
   return error?.message ?? 'No se pudo conectar con la nube.';
 }
 
+function friendlyWriteError(error) {
+  const code = error?.code ?? '';
+  if (code === 'permission-denied') {
+    return 'Firebase rechazó este cambio. Revisa que las reglas de Firestore estén actualizadas en la consola de Firebase.';
+  }
+  if (code === 'unavailable') {
+    return 'No se pudo conectar con la nube. El cambio no se guardó; revisa tu conexión e intenta de nuevo.';
+  }
+  return error?.message ?? 'No se pudo guardar en la nube.';
+}
+
 export class FirestoreAdapter {
   constructor({ firebaseConfig, familyCode }) {
     this.mode = 'cloud';
@@ -157,13 +168,21 @@ export class FirestoreAdapter {
 
   async put(record) {
     if (!this.recordsRef) throw new Error('Firestore no está conectado.');
-    await setDoc(doc(this.recordsRef, record.id), record, { merge: false });
+    try {
+      await setDoc(doc(this.recordsRef, record.id), record, { merge: false });
+    } catch (error) {
+      throw new Error(friendlyWriteError(error));
+    }
     return record;
   }
 
   async remove(id) {
     if (!this.recordsRef) throw new Error('Firestore no está conectado.');
-    await deleteDoc(doc(this.recordsRef, id));
+    try {
+      await deleteDoc(doc(this.recordsRef, id));
+    } catch (error) {
+      throw new Error(friendlyWriteError(error));
+    }
   }
 
   async migrate(records) {

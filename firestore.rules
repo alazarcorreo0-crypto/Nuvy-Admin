@@ -21,7 +21,7 @@ service cloud.firestore {
     function isValidRecord(data) {
       return data.keys().hasAll(['id', 'kind', 'createdAt', 'updatedAt', 'schemaVersion'])
         && data.id is string
-        && data.kind in ['supply', 'purchase', 'sale', 'expense', 'count']
+        && data.kind in ['supply', 'supplyType', 'purchase', 'sale', 'expense', 'count']
         && data.createdAt is string
         && data.updatedAt is string
         && data.schemaVersion is int;
