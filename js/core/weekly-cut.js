@@ -8,7 +8,11 @@ import {
   getWeightedAverageCost,
   hasPurchasesAfterCount
 } from './inventory.js';
-import { purchaseRecordBaseQuantity, getBaseUnitLabel } from './units.js';
+import {
+  getSupplyType,
+  purchaseRecordBaseQuantity,
+  getBaseUnitLabel
+} from './units.js';
 
 /**
  * Calcula la cantidad sugerida de compra para la próxima semana.
@@ -54,12 +58,30 @@ export function buildWeeklyCut({
   const weekExpenses = expenses.filter((expense) =>
     isDateInRange(expense.date, start, end)
   );
+  const weekFixedExpenses = weekExpenses.filter(
+    (expense) => expense.category === 'fixed'
+  );
+  const weekVariableExpenses = weekExpenses.filter(
+    (expense) => expense.category !== 'fixed'
+  );
 
   const totalSales = sum(weekSales.map((sale) => sale.amount));
   const totalExpenses = sum(weekExpenses.map((expense) => expense.amount));
+  const totalFixedExpenses = sum(
+    weekFixedExpenses.map((expense) => expense.amount)
+  );
+  const totalVariableExpenses = sum(
+    weekVariableExpenses.map((expense) => expense.amount)
+  );
 
   const rows = supplies.map((supply) => {
     const baseUnit = getBaseUnitLabel(supply);
+    const typeConfig = getSupplyType(supply.type);
+    // Los insumos de tipos fijos (base, topping seco y líquido) forman parte
+    // del producto que se vende por gramo. Los tipos personalizados
+    // (desechables, limpieza, empaques) son de apoyo: su consumo se suma
+    // a los gastos para el punto de equilibrio.
+    const isProductSupply = !typeConfig.custom;
     const initialCount = getInitialCount(counts, supply.id, start);
     const finalCandidate = getFinalCount(counts, supply.id, start, end);
     const finalIsStale =
@@ -126,6 +148,7 @@ export function buildWeeklyCut({
       supplyId: supply.id,
       supplyName: supply.name,
       baseUnit,
+      isProductSupply,
       initialCount,
       initialBase,
       finalCount,
@@ -154,6 +177,24 @@ export function buildWeeklyCut({
     .filter((row) => row.missingFinal)
     .map((row) => row.supplyName);
 
+  const measuredRows = visibleRows.filter(
+    (row) => row.consumptionBase !== null
+  );
+  const productRows = measuredRows.filter((row) => row.isProductSupply);
+  const supportRows = measuredRows.filter((row) => !row.isProductSupply);
+
+  const productConsumptionCost = sum(
+    productRows.map((row) => row.consumptionCost)
+  );
+  const supportConsumptionCost = sum(
+    supportRows.map((row) => row.consumptionCost)
+  );
+  // Gramos de mezcla consumidos: los tipos de producto se miden en g o ml
+  // y la app toma 1 L como 1 kg, así que se suman directo.
+  const productConsumptionBase = sum(
+    productRows.map((row) => row.consumptionBase)
+  );
+
   const totalConsumptionCost = sum(
     visibleRows
       .map((row) => row.consumptionCost)
@@ -166,6 +207,45 @@ export function buildWeeklyCut({
     weekPurchases.map((purchase) => purchase.totalPaid)
   );
   const profit = totalSales - totalExpenses - totalConsumptionCost;
+
+  // ── Análisis de viabilidad ──────────────────────────────────────────────
+  // Solo se calcula cuando hay conteos: sin conteos no hay consumo conocido.
+  const hasProductData = productConsumptionBase > 0;
+  const costPerGram = hasProductData
+    ? productConsumptionCost / productConsumptionBase
+    : null;
+  // Precio al que de verdad estás vendiendo el gramo: lo vendido dividido
+  // entre los gramos de producto consumidos (asume que lo consumido se
+  // vendió; es aproximado porque también cuenta merma y muestras).
+  const effectivePricePerGram = hasProductData
+    ? totalSales / productConsumptionBase
+    : null;
+  const marginPerGram =
+    effectivePricePerGram !== null && costPerGram !== null
+      ? effectivePricePerGram - costPerGram
+      : null;
+
+  const grossMargin = totalSales - productConsumptionCost;
+  const grossMarginPct = totalSales > 0 ? grossMargin / totalSales : null;
+
+  // Todo lo que hay que cubrir antes de ganar: gastos fijos, gastos
+  // variables y el costo de los insumos de apoyo consumidos.
+  const totalOverheads =
+    totalFixedExpenses + totalVariableExpenses + supportConsumptionCost;
+
+  // Ventas necesarias para no perder dinero en la semana. Solo tiene
+  // sentido si se conoce el costo del producto (con conteos).
+  const breakEvenSales =
+    hasProductData && grossMarginPct !== null && grossMarginPct > 0
+      ? totalOverheads / grossMarginPct
+      : null;
+  // Gramos que habría que vender para cubrir lo mismo.
+  const breakEvenGrams =
+    marginPerGram !== null && marginPerGram > 0
+      ? totalOverheads / marginPerGram
+      : null;
+
+  const viable = complete && hasProductData && profit >= 0;
 
   const suggestions = visibleRows
     .filter((row) => Number(row.suggested) > 0)
@@ -192,9 +272,13 @@ export function buildWeeklyCut({
     end,
     weekSales,
     weekExpenses,
+    weekFixedExpenses,
+    weekVariableExpenses,
     weekPurchases,
     totalSales,
     totalExpenses,
+    totalFixedExpenses,
+    totalVariableExpenses,
     totalPurchases,
     totalConsumptionCost,
     totalFinalValue,
@@ -204,6 +288,21 @@ export function buildWeeklyCut({
     suggestions,
     missingCounts,
     complete,
-    warnings
+    warnings,
+    viability: {
+      hasProductData,
+      productConsumptionBase,
+      productConsumptionCost,
+      supportConsumptionCost,
+      costPerGram,
+      effectivePricePerGram,
+      marginPerGram,
+      grossMargin,
+      grossMarginPct,
+      totalOverheads,
+      breakEvenSales,
+      breakEvenGrams,
+      viable
+    }
   };
 }

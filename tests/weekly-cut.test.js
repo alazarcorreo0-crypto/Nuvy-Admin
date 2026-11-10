@@ -5,7 +5,8 @@ import { getWeekRange } from '../js/core/dates.js';
 import { getWeightedAverageCost } from '../js/core/inventory.js';
 import {
   countToBase,
-  purchaseToBase
+  purchaseToBase,
+  setCustomSupplyTypes
 } from '../js/core/units.js';
 import {
   buildWeeklyCut,
@@ -142,6 +143,115 @@ function successScenario() {
     ]
   };
 }
+
+test('análisis de viabilidad: costo por gramo, margen y punto de equilibrio', () => {
+  const scenario = successScenario();
+  scenario.expenses = [
+    expense({ concept: 'Renta', amount: 500, category: 'fixed' }),
+    expense({ concept: 'Gasolina', amount: 300, category: 'variable' })
+  ];
+  const cut = buildWeeklyCut(scenario);
+
+  // Producto consumido: 2,000 g de base + 400 g de nuez = 2,400 g por $200.
+  assert.equal(cut.viability.productConsumptionBase, 2400);
+  closeTo(cut.viability.productConsumptionCost, 200);
+  closeTo(cut.viability.costPerGram, 200 / 2400);
+  closeTo(cut.viability.effectivePricePerGram, 5000 / 2400);
+  closeTo(cut.viability.marginPerGram, 2);
+
+  // Margen bruto: 5,000 − 200 = 4,800 (96% de las ventas).
+  closeTo(cut.viability.grossMargin, 4800);
+  closeTo(cut.viability.grossMarginPct, 0.96);
+
+  // Hay que cubrir $800 de gastos. Sin insumos de apoyo.
+  closeTo(cut.viability.totalOverheads, 800);
+  closeTo(cut.viability.breakEvenSales, 800 / 0.96);
+  closeTo(cut.viability.breakEvenGrams, 400);
+
+  assert.equal(cut.viability.viable, true);
+  assert.equal(cut.totalFixedExpenses, 500);
+  assert.equal(cut.totalVariableExpenses, 300);
+});
+
+test('los gastos viejos sin categoría cuentan como variables', () => {
+  const scenario = successScenario();
+  scenario.expenses = [expense({ concept: 'Renta', amount: 100 })];
+  const cut = buildWeeklyCut(scenario);
+
+  assert.equal(cut.totalFixedExpenses, 0);
+  assert.equal(cut.totalVariableExpenses, 100);
+});
+
+test('los insumos de tipos personalizados son de apoyo, no producto', () => {
+  const VASOS = {
+    id: 'vasos',
+    name: 'Vasos',
+    type: 'desechables',
+    purchaseUnit: 'piece',
+    contentPerUnit: 1,
+    pricePerUnit: 1
+  };
+
+  setCustomSupplyTypes([
+    { id: 'desechables', name: 'Desechables', baseUnit: 'piece', defaultUnit: 'piece' }
+  ]);
+  try {
+    const cut = buildWeeklyCut({
+      anchorDate: '2026-11-09',
+      supplies: [BASE, VASOS],
+      purchases: [
+        purchase({ supplyId: 'base', quantity: 1, totalPaid: 200, contentPerUnit: 5000 }),
+        purchase({
+          supplyId: 'vasos',
+          supplyName: 'Vasos',
+          unit: 'piece',
+          quantity: 100,
+          totalPaid: 100,
+          contentPerUnit: 1
+        })
+      ],
+      sales: [sale({ amount: 1000 })],
+      expenses: [expense({ concept: 'Renta', amount: 100, category: 'fixed' })],
+      counts: [
+        count({ supplyId: 'base', quantity: 0, date: '2026-11-07' }),
+        count({ supplyId: 'vasos', quantity: 0, date: '2026-11-07', baseUnit: 'pza' }),
+        count({ supplyId: 'base', quantity: 4000, date: '2026-11-13' }),
+        count({ supplyId: 'vasos', quantity: 50, date: '2026-11-13', baseUnit: 'pza' })
+      ]
+    });
+
+    // Solo la base (1,000 g) cuenta como producto.
+    assert.equal(cut.viability.productConsumptionBase, 1000);
+    closeTo(cut.viability.costPerGram, 0.04);
+    closeTo(cut.viability.effectivePricePerGram, 1);
+    closeTo(cut.viability.marginPerGram, 0.96);
+
+    // Los vasos consumidos ($50) van a los gastos por cubrir.
+    closeTo(cut.viability.supportConsumptionCost, 50);
+    closeTo(cut.viability.totalOverheads, 150);
+    closeTo(cut.viability.breakEvenSales, 150 / 0.96);
+
+    assert.equal(cut.viability.viable, true);
+    closeTo(cut.profit, 810);
+  } finally {
+    setCustomSupplyTypes([]);
+  }
+});
+
+test('sin conteos no hay análisis de viabilidad', () => {
+  const cut = buildWeeklyCut({
+    anchorDate: '2026-11-09',
+    supplies: [BASE],
+    purchases: [purchase({ supplyId: 'base', quantity: 1, totalPaid: 200 })],
+    sales: [sale({ amount: 500 })],
+    expenses: [],
+    counts: []
+  });
+
+  assert.equal(cut.viability.hasProductData, false);
+  assert.equal(cut.viability.costPerGram, null);
+  assert.equal(cut.viability.breakEvenSales, null);
+});
 
 test('la semana de negocio va de sábado a viernes', () => {
   assert.deepEqual(getWeekRange('2026-11-07'), {

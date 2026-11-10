@@ -134,11 +134,43 @@ export function validateSale(input) {
 }
 
 export function validateExpense(input) {
+  const category = input.category === 'fixed' ? 'fixed' : 'variable';
   return {
     date: date(input.date),
     concept: text(input.concept, 'el concepto del gasto'),
+    category,
     amount: decimal(input.amount, 'el monto del gasto', { min: 0.01 })
   };
+}
+
+/**
+ * Conceptos que casi siempre son gastos fijos. Se usan solo para sugerir
+ * la clasificación en el formulario; el usuario siempre puede cambiarla.
+ */
+export const FIXED_EXPENSE_CONCEPTS = [
+  'renta',
+  'luz',
+  'agua',
+  'internet',
+  'telefono',
+  'sueldo',
+  'sueldos',
+  'nomina',
+  'salario',
+  'salarios',
+  'predial',
+  'seguro'
+];
+
+export function suggestExpenseCategory(concept) {
+  const clean = String(concept ?? '')
+    .trim()
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '');
+  return FIXED_EXPENSE_CONCEPTS.some((word) => clean.includes(word))
+    ? 'fixed'
+    : 'variable';
 }
 
 export function validateCount(input, supply) {

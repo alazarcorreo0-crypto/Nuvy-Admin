@@ -31,12 +31,12 @@ La app tiene estas pantallas:
 | Pantalla | Para qué sirve |
 | --- | --- |
 | **Inicio** | Resumen del día y de la semana, accesos rápidos. |
-| **Ventas** | Registrar el total vendido del día (solo fecha y monto). |
-| **Gastos** | Sueldos, renta, luz, agua, gas, etc. |
-| **Compras** | Insumos que entran al inventario, con su costo. Se pueden **editar** después. |
-| **Inventario** | Conteo físico de lo que queda y estimación del inventario actual. |
+| **Ventas** | Registrar el total vendido del día (solo fecha y monto). Descargable en CSV. |
+| **Gastos** | Sueldos, renta, luz, agua, gas, etc. Cada gasto se marca como **fijo o variable**. Descargable en CSV. |
+| **Compras** | Insumos que entran al inventario, con su costo. Se pueden **editar** después. Descargable en CSV. |
+| **Inventario** | Conteo físico de lo que queda y estimación del inventario actual. Descargable en CSV. |
 | **Insumos** | Catálogo: base de nieve, toppings y **tipos personalizados** (desechables, limpieza, etc.). |
-| **Corte semanal** | Consumo, costo del consumo, ganancia real y compra sugerida. |
+| **Corte semanal** | Consumo, costo del consumo, ganancia real, compra sugerida y **análisis de viabilidad** (¿voy bien o mal?). |
 | **Ajustes** | Código de familia, enlace para compartir, sincronización e instalación. |
 
 Reglas importantes del negocio:
@@ -66,6 +66,17 @@ Consumo = inventario inicial + compras de la semana − inventario final
 - **Compra sugerida:** `consumo de la semana ÷ contenido de una unidad de compra`.
   - Bolsas y piezas se redondean **hacia arriba** (no se compran fracciones).
   - Kilogramos y litros se redondean **hacia arriba a 2 decimales**.
+
+### Análisis de viabilidad (¿voy bien o mal?)
+
+El corte también incluye un panel que responde si el precio actual deja ganancia:
+
+- **Costo del producto por gramo:** lo que cuesta la mezcla vendida (base + toppings secos y líquidos; 1 L se toma como 1 kg). Los insumos de tipos personalizados (desechables, limpieza) no cuentan como producto: son de apoyo.
+- **Precio real por gramo:** ventas ÷ gramos consumidos. Aproximado, porque asume que todo lo consumido se vendió (la merma cuenta como consumo).
+- **Ganancia por gramo:** precio real − costo por gramo.
+- **Punto de equilibrio semanal:** las ventas mínimas para no perder dinero. Se calcula como `(gastos fijos + gastos variables + costo de insumos de apoyo consumidos) ÷ margen bruto`.
+
+Solo necesita que registres los conteos físicos: sin conteos no hay consumo conocido y el panel te lo avisa.
 
 El corte también avisa cuando:
 
@@ -357,6 +368,13 @@ También puede aparecer un aviso dentro de la app con el botón **Instalar Nuvy 
 
 1. **Ventas:** al terminar el día, registra el total vendido.
 2. **Gastos:** registra sueldos, luz, renta y cualquier gasto que no sea compra de insumos.
+   - Marca cada gasto como **fijo** (renta, luz, agua, sueldos, internet) o **variable** (gasolina, imprevistos).
+   - Cuando escribes un concepto claramente fijo, la app lo sugiere sola.
+   - La clasificación se usa para el punto de equilibrio del corte.
+
+### Exportar datos (CSV)
+
+En **Ventas**, **Gastos**, **Compras** e **Inventario** hay un botón **Descargar CSV**. El archivo abre directo en Excel o Google Sheets con acentos correctos y números listos para sumar. El nombre del archivo incluye la fecha, por ejemplo `nuvy-gastos-2026-11-09.csv`.
 
 ### Cada vez que compres insumos
 

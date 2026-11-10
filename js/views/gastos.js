@@ -7,8 +7,11 @@ import {
   statCard
 } from '../ui/components.js';
 import { icon } from '../ui/icons.js';
+import { suggestExpenseCategory } from '../core/validation.js';
 import {
   confirmDelete,
+  downloadCsv,
+  exportCsvButton,
   groupByDate,
   handleSubmit,
   readForm,
@@ -59,6 +62,14 @@ function renderForm(ctx) {
               <span class="input-suffix">MXN</span>
             </div>
           </div>
+          <div class="field">
+            <label for="expense-category">Tipo de gasto</label>
+            <select id="expense-category" name="category" required>
+              <option value="fixed">Fijo — renta, luz, agua, sueldos, internet</option>
+              <option value="variable">Variable — gasolina, imprevistos, otros</option>
+            </select>
+            <span class="field-help">Los fijos se usan para calcular tu punto de equilibrio en el corte.</span>
+          </div>
         </div>
         <div class="form-actions">
           <button class="button button-primary" type="submit">${icon('plus')} Guardar gasto</button>
@@ -77,12 +88,15 @@ export function render(ctx) {
   const expensesWeek = expenses.filter(
     (expense) => expense.date >= week.start && expense.date <= week.end
   );
+  const fixedWeek = expensesWeek.filter((expense) => expense.category === 'fixed');
+  const variableWeek = expensesWeek.filter((expense) => expense.category !== 'fixed');
 
   return `
     ${pageHeader({
       eyebrow: 'Dinero que sale',
       title: 'Gastos',
-      subtitle: 'Registra los gastos del negocio. Las compras de insumos van en su propia pantalla.'
+      subtitle: 'Registra los gastos del negocio. Las compras de insumos van en su propia pantalla.',
+      actions: expenses.length ? exportCsvButton('expenses') : ''
     })}
 
     ${renderForm(ctx)}
@@ -99,9 +113,16 @@ export function render(ctx) {
         ${statCard({
           label: 'Gastos de la semana',
           value: money(sum(expensesWeek.map((expense) => expense.amount))),
-          detail: formatWeekRange(week.start, week.end),
+          detail: `${formatWeekRange(week.start, week.end)} · Fijos ${money(sum(fixedWeek.map((expense) => expense.amount)))} · Variables ${money(sum(variableWeek.map((expense) => expense.amount)))}`,
           tone: 'warning',
           iconName: 'chart'
+        })}
+        ${statCard({
+          label: 'Fijos de la semana',
+          value: money(sum(fixedWeek.map((expense) => expense.amount))),
+          detail: `Renta, luz, agua, sueldos…`,
+          tone: 'default',
+          iconName: 'calendar'
         })}
       </div>
     </section>
@@ -128,7 +149,7 @@ export function render(ctx) {
                         (expense) => `
                           <div class="record-item">
                             <div class="record-main">
-                              <div class="record-title">${escapeHtml(expense.concept)}</div>
+                              <div class="record-title">${escapeHtml(expense.concept)} ${expense.category === 'fixed' ? '<span class="badge badge-neutral">Fijo</span>' : '<span class="badge badge-dry">Variable</span>'}</div>
                               <div class="record-meta"><span>${formatDateLong(expense.date)}</span></div>
                             </div>
                             <div class="record-amount">${money(expense.amount)}</div>
@@ -158,16 +179,26 @@ export function render(ctx) {
 
 export function bind(root, ctx) {
   const form = root.querySelector('#expense-form');
+  const conceptInput = form.elements.namedItem('concept');
+  const categorySelect = form.elements.namedItem('category');
+
+  // Cuando el concepto claramente es fijo (renta, luz, sueldos…), lo sugerimos.
+  conceptInput.addEventListener('input', () => {
+    if (!categorySelect) return;
+    categorySelect.value = suggestExpenseCategory(conceptInput.value);
+  });
+
   handleSubmit(form, async () => {
     const values = readForm(form);
     await ctx.store.addExpense(values);
     ctx.toast('Gasto registrado.', 'success');
     resetFormWithDate(form, ctx.today);
+    if (categorySelect) categorySelect.value = 'variable';
     ctx.refresh();
   });
 
   root.querySelector('[data-focus-expense]')?.addEventListener('click', () => {
-    form.elements.namedItem('concept')?.focus();
+    conceptInput?.focus();
     form.scrollIntoView({ behavior: 'smooth', block: 'center' });
   });
 
@@ -182,5 +213,20 @@ export function bind(root, ctx) {
         ctx.toast(error.message, 'danger');
       }
     });
+  });
+
+  root.querySelector('[data-export-csv="expenses"]')?.addEventListener('click', () => {
+    const expenses = ctx.snapshot.expenses;
+    downloadCsv(
+      `nuvy-gastos-${ctx.today}.csv`,
+      ['Fecha', 'Concepto', 'Tipo', 'Monto (MXN)'],
+      expenses.map((expense) => [
+        expense.date,
+        expense.concept,
+        expense.category === 'fixed' ? 'Fijo' : 'Variable',
+        expense.amount
+      ])
+    );
+    ctx.toast('Gastos descargados en CSV.', 'success');
   });
 }

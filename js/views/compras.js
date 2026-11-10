@@ -19,6 +19,8 @@ import {
 import { icon } from '../ui/icons.js';
 import {
   confirmDelete,
+  downloadCsv,
+  exportCsvButton,
   groupByDate,
   handleSubmit,
   readForm,
@@ -159,7 +161,8 @@ export function render(ctx) {
     ${pageHeader({
       eyebrow: 'Inventario que entra',
       title: 'Compras',
-      subtitle: 'Cada compra suma al inventario del sistema. El consumo se calcula con los conteos físicos.'
+      subtitle: 'Cada compra suma al inventario del sistema. El consumo se calcula con los conteos físicos.',
+      actions: purchases.length ? exportCsvButton('purchases') : ''
     })}
 
     ${form}
@@ -228,6 +231,23 @@ function updatePurchaseForm(form, ctx) {
 }
 
 export function bind(root, ctx) {
+  root.querySelector('[data-export-csv="purchases"]')?.addEventListener('click', () => {
+    const purchases = ctx.snapshot.purchases;
+    downloadCsv(
+      `nuvy-compras-${ctx.today}.csv`,
+      ['Fecha', 'Insumo', 'Cantidad', 'Unidad', 'Contenido por unidad', 'Total pagado (MXN)'],
+      purchases.map((purchase) => [
+        purchase.date,
+        purchase.supplyName,
+        purchase.quantity,
+        purchase.unit,
+        purchase.contentPerUnit,
+        purchase.totalPaid
+      ])
+    );
+    ctx.toast('Compras descargadas en CSV.', 'success');
+  });
+
   const form = root.querySelector('#purchase-form');
   if (!form) {
     root.querySelectorAll('[data-go]').forEach((button) => {

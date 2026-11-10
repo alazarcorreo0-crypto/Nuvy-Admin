@@ -1,2 +1,5 @@
 node_modules/
 nuvy-admin-sitio.zip
+.firebase/
+.agents/
+skills-lock.json

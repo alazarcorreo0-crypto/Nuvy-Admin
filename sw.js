@@ -10,7 +10,7 @@
  * Cuando publiques cambios importantes, sube el número de VERSION.
  */
 
-const VERSION = 'nuvy-admin-v1.0.4';
+const VERSION = 'nuvy-admin-v1.0.5';
 
 const APP_SHELL = [
   './',

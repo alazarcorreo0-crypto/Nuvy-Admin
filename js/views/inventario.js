@@ -16,6 +16,8 @@ import {
 import { icon } from '../ui/icons.js';
 import {
   confirmDelete,
+  downloadCsv,
+  exportCsvButton,
   groupByDate,
   handleSubmit,
   readForm,
@@ -188,7 +190,8 @@ export function render(ctx) {
     ${pageHeader({
       eyebrow: 'Viernes de inventario',
       title: 'Inventario',
-      subtitle: 'El inventario solo cambia con compras y conteos físicos. Nunca se descuenta automáticamente por una venta.'
+      subtitle: 'El inventario solo cambia con compras y conteos físicos. Nunca se descuenta automáticamente por una venta.',
+      actions: counts.length ? exportCsvButton('counts') : ''
     })}
 
     <div class="notice notice-info">
@@ -275,6 +278,23 @@ function updateCountForm(form, ctx, resetUnit = false) {
 }
 
 export function bind(root, ctx) {
+  root.querySelector('[data-export-csv="counts"]')?.addEventListener('click', () => {
+    const counts = ctx.snapshot.counts;
+    downloadCsv(
+      `nuvy-conteos-${ctx.today}.csv`,
+      ['Fecha', 'Insumo', 'Cantidad capturada', 'Unidad capturada', 'Cantidad base', 'Unidad base'],
+      counts.map((count) => [
+        count.date,
+        count.supplyName,
+        count.enteredQuantity ?? count.quantity,
+        count.enteredUnit ?? count.baseUnit ?? 'g',
+        count.quantity,
+        count.baseUnit ?? 'g'
+      ])
+    );
+    ctx.toast('Conteos descargados en CSV.', 'success');
+  });
+
   const form = root.querySelector('#count-form');
   if (!form) {
     root.querySelectorAll('[data-go]').forEach((button) => {

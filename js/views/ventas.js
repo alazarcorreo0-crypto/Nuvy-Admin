@@ -8,6 +8,8 @@ import {
 import { icon } from '../ui/icons.js';
 import {
   confirmDelete,
+  downloadCsv,
+  exportCsvButton,
   groupByDate,
   handleSubmit,
   readForm,
@@ -62,7 +64,8 @@ export function render(ctx) {
     ${pageHeader({
       eyebrow: 'Dinero que entra',
       title: 'Ventas',
-      subtitle: 'Captura el total vendido del día. El sistema lo usa para el corte semanal.'
+      subtitle: 'Captura el total vendido del día. El sistema lo usa para el corte semanal.',
+      actions: sales.length ? exportCsvButton('sales') : ''
     })}
 
     ${renderForm(ctx)}
@@ -149,6 +152,16 @@ export function bind(root, ctx) {
   root.querySelector('[data-focus-sale]')?.addEventListener('click', () => {
     form.elements.namedItem('amount')?.focus();
     form.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  });
+
+  root.querySelector('[data-export-csv="sales"]')?.addEventListener('click', () => {
+    const sales = ctx.snapshot.sales;
+    downloadCsv(
+      `nuvy-ventas-${ctx.today}.csv`,
+      ['Fecha', 'Monto (MXN)'],
+      sales.map((sale) => [sale.date, sale.amount])
+    );
+    ctx.toast('Ventas descargadas en CSV.', 'success');
   });
 
   root.querySelectorAll('[data-delete-sale]').forEach((button) => {

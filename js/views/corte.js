@@ -5,7 +5,7 @@ import {
   getWeekRange,
   isValidDateString
 } from '../core/dates.js';
-import { baseQuantity, cost, money, purchaseQuantity } from '../core/format.js';
+import { baseQuantity, cost, money, number, purchaseQuantity } from '../core/format.js';
 import { getPurchaseUnitLabel } from '../core/units.js';
 import {
   emptyState,
@@ -80,7 +80,7 @@ function renderTotals(cut) {
         ${statCard({
           label: 'Gastos de la semana',
           value: money(cut.totalExpenses),
-          detail: `${cut.weekExpenses.length} gasto${cut.weekExpenses.length === 1 ? '' : 's'}`,
+          detail: `Fijos ${money(cut.totalFixedExpenses)} · Variables ${money(cut.totalVariableExpenses)}`,
           tone: 'danger',
           iconName: 'receipt'
         })}
@@ -108,6 +108,98 @@ function renderTotals(cut) {
             : 'Parcial: faltan conteos finales',
           tone: 'default',
           iconName: 'box'
+        })}
+      </div>
+    </section>
+  `;
+}
+
+function renderViability(cut) {
+  const v = cut.viability;
+
+  if (!v.hasProductData) {
+    return `
+      <section class="section">
+        <div class="section-heading">
+          <div>
+            <h2>¿Voy bien o mal?</h2>
+            <p>Comparación entre tu precio y el costo real del producto que vendes.</p>
+          </div>
+        </div>
+        ${notice({
+          tone: 'info',
+          iconName: 'scale',
+          title: 'Todavía no se puede calcular',
+          text: 'Registra los conteos físicos de la base y los toppings para saber cuántos gramos consumes. Con eso la app calcula cuánto te cuesta cada gramo y si tu precio deja ganancia.'
+        })}
+      </section>
+    `;
+  }
+
+  const verdict = cut.complete
+    ? v.viable
+      ? notice({
+          tone: 'success',
+          iconName: 'check',
+          title: `Tu precio sí te deja ganancia: ${money(cut.profit)}`,
+          text: 'De cada peso vendido te quedas con lo que sobra después del producto, los gastos fijos y los variables.'
+        })
+      : notice({
+          tone: 'danger',
+          iconName: 'alert',
+          title: `Con este precio pierdes ${money(Math.abs(cut.profit))}`,
+          text: 'El costo del producto más los gastos de la semana son mayores que lo vendido. Sube el precio, baja costos o vende más gramos.'
+        })
+    : notice({
+        tone: 'warning',
+        iconName: 'alert',
+        title: 'Corte incompleto',
+        text: 'Faltan conteos finales, así que el consumo está parcial. Completa los conteos para ver el veredicto.'
+      });
+
+  const marginTone = v.marginPerGram !== null && v.marginPerGram > 0 ? 'success' : 'danger';
+
+  return `
+    <section class="section">
+      <div class="section-heading">
+        <div>
+          <h2>¿Voy bien o mal?</h2>
+          <p>Qué tanto te cuesta el gramo de producto y cuánto necesitas vender para no perder.</p>
+        </div>
+      </div>
+
+      ${verdict}
+
+      <div class="stats-grid">
+        ${statCard({
+          label: 'Costo del producto por gramo',
+          value: cost(v.costPerGram),
+          detail: `${baseQuantity(v.productConsumptionBase, 'g')} de mezcla consumidos (base + toppings; los líquidos cuentan 1 L como 1 kg)`,
+          tone: 'default',
+          iconName: 'scale'
+        })}
+        ${statCard({
+          label: 'Precio real por gramo',
+          value: cost(v.effectivePricePerGram),
+          detail: 'Ventas ÷ gramos consumidos. Aproximado: asume que todo lo consumido se vendió.',
+          tone: 'info',
+          iconName: 'cash'
+        })}
+        ${statCard({
+          label: 'Ganancia por gramo',
+          value: cost(v.marginPerGram),
+          detail: 'Precio real − costo del producto',
+          tone: marginTone,
+          iconName: 'chart'
+        })}
+        ${statCard({
+          label: 'Punto de equilibrio semanal',
+          value: v.breakEvenSales !== null ? money(v.breakEvenSales) : '—',
+          detail: v.breakEvenSales !== null
+            ? `Ventas mínimas para no perder${v.breakEvenGrams !== null ? ` (≈ ${number(v.breakEvenGrams / 1000)} kg)` : ''}. Cubre gastos fijos ${money(v.totalOverheads - cut.totalVariableExpenses - v.supportConsumptionCost)}, variables ${money(cut.totalVariableExpenses)} e insumos de apoyo ${money(v.supportConsumptionCost)}.`
+            : 'El costo del producto consume más de lo que se vende; no hay punto de equilibrio con estos números.',
+          tone: 'warning',
+          iconName: 'clipboard'
         })}
       </div>
     </section>
@@ -252,6 +344,7 @@ export function render(ctx) {
     ${noActivity || `
       ${renderSummary(cut)}
       ${renderTotals(cut)}
+      ${renderViability(cut)}
 
       <section class="section">
         <div class="section-heading">
