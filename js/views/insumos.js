@@ -1,7 +1,12 @@
 import {
+  allowedBaseUnits,
   allowedPurchaseUnits,
+  BASE_UNIT_LABELS,
+  BASE_UNIT_NAMES,
+  defaultBaseUnitForType,
   defaultContentForUnit,
   defaultUnitForBaseUnit,
+  getBaseUnit,
   getBaseUnitLabel,
   getContentHelp,
   getContentLabel,
@@ -9,6 +14,7 @@ import {
   getPurchaseUnitLabel,
   getSupplyType,
   isContentFixed,
+  normalizeSupplyBaseUnit,
   purchaseUnitsForBaseUnit
 } from '../core/units.js';
 import { cost, money, number, purchaseQuantity } from '../core/format.js';
@@ -28,13 +34,31 @@ import {
   setPreview
 } from './shared.js';
 
-function unitOptionsFor(type, selected) {
-  return allowedPurchaseUnits(type)
+function unitOptionsFor(type, selected, baseUnit = null) {
+  return allowedPurchaseUnits(type, baseUnit)
     .map(
       (unit) =>
         `<option value="${unit}" ${unit === selected ? 'selected' : ''}>${escapeHtml(getPurchaseUnitLabel(unit, true))}</option>`
     )
     .join('');
+}
+
+function baseUnitOptionsFor(type, selected) {
+  return allowedBaseUnits(type)
+    .map(
+      (unit) =>
+        `<option value="${unit}" ${unit === selected ? 'selected' : ''}>${escapeHtml(BASE_UNIT_NAMES[unit] ?? unit)}</option>`
+    )
+    .join('');
+}
+
+function defaultPurchaseUnitFor(type, baseUnit) {
+  const allowed = allowedPurchaseUnits(type, baseUnit);
+  const config = getSupplyType(type);
+  if (baseUnit === defaultBaseUnitForType(type) && allowed.includes(config.defaultUnit)) {
+    return config.defaultUnit;
+  }
+  return allowed[0] ?? config.defaultUnit;
 }
 
 function typeOptionsFor(ctx, selected) {
@@ -51,10 +75,18 @@ function renderForm(ctx) {
     ? ctx.store.getSupplyById(ctx.state.editingSupplyId)
     : null;
   const type = editing?.type ?? 'base';
-  const unit = editing?.purchaseUnit ?? getSupplyType(type).defaultUnit;
-  const content = editing?.contentPerUnit ?? defaultContentForUnit(unit, type);
-  const suffix = getContentSuffix(unit, type);
-  const fixed = isContentFixed(unit, type);
+  const baseUnit = editing
+    ? normalizeSupplyBaseUnit(type, editing.baseUnit)
+    : defaultBaseUnitForType(type);
+  const allowedUnits = allowedPurchaseUnits(type, baseUnit);
+  const keepEditingUnit = Boolean(editing) && allowedUnits.includes(editing.purchaseUnit);
+  const unit = keepEditingUnit ? editing.purchaseUnit : defaultPurchaseUnitFor(type, baseUnit);
+  const content = keepEditingUnit
+    ? editing.contentPerUnit
+    : defaultContentForUnit(unit, type, baseUnit);
+  const suffix = getContentSuffix(unit, type, baseUnit);
+  const fixed = isContentFixed(unit, type, baseUnit);
+  const canChooseBaseUnit = allowedBaseUnits(type).length > 1;
 
   return `
     <section class="card form-card" id="supply-form-card">
@@ -85,12 +117,20 @@ function renderForm(ctx) {
             </button>
           </div>
 
+          <div class="field ${canChooseBaseUnit ? '' : 'hidden'}" data-base-unit-field>
+            <label for="supply-base-unit">¿Cómo se mide?</label>
+            <select id="supply-base-unit" name="baseUnit" required>
+              ${baseUnitOptionsFor(type, baseUnit)}
+            </select>
+            <span class="field-help">Elige gramos si lo compras por peso; mililitros si lo compras por volumen.</span>
+          </div>
+
           <div class="field">
             <label for="supply-unit">Unidad de compra</label>
             <select id="supply-unit" name="purchaseUnit" required>
-              ${unitOptionsFor(type, unit)}
+              ${unitOptionsFor(type, unit, baseUnit)}
             </select>
-            <span class="field-help" data-unit-help>La base se compra por bolsa; los toppings secos por kg o pieza; los líquidos por litro o kg.</span>
+            <span class="field-help" data-unit-help>La base se compra por bolsa; los toppings secos por kg, gramos o pieza; los líquidos por kg, gramos o litro.</span>
           </div>
 
           <div class="field">
@@ -98,7 +138,7 @@ function renderForm(ctx) {
             <input id="supply-content" name="contentPerUnit" type="number" inputmode="decimal"
               min="0.0001" step="any" required value="${escapeHtml(String(content))}"
               ${fixed ? 'readonly' : ''}>
-            <span class="field-help" data-content-help>${escapeHtml(getContentHelp(unit, type))}</span>
+            <span class="field-help" data-content-help>${escapeHtml(getContentHelp(unit, type, baseUnit))}</span>
           </div>
 
           <div class="field">
@@ -109,7 +149,7 @@ function renderForm(ctx) {
                 value="${escapeHtml(String(editing?.pricePerUnit ?? ''))}">
               <span class="input-suffix">MXN</span>
             </div>
-            <span class="field-help">Es el precio que pagas hoy por una bolsa, kg, pieza o litro.</span>
+            <span class="field-help">Es el precio que pagas hoy por una bolsa, kg, gramo, pieza o litro.</span>
           </div>
 
           <div class="field field-span-2">
@@ -129,7 +169,9 @@ function renderForm(ctx) {
 
 function renderTypeCard(entry) {
   const config = entry.config;
-  const baseLabel = getBaseUnitLabel({ type: entry.key });
+  const baseLabel = allowedBaseUnits(entry.key)
+    .map((unit) => BASE_UNIT_LABELS[unit] ?? unit)
+    .join(' o ');
   const unitList = (config.units ?? [])
     .map((unit) => getPurchaseUnitLabel(unit, true))
     .join(', ');
@@ -226,7 +268,7 @@ function renderSupplyCard(supply, ctx) {
   const costInfo = getWeightedAverageCost(supply, snapshot.purchases);
   const baseUnit = getBaseUnitLabel(supply);
   const typeConfig = getSupplyType(supply.type);
-  const contentSuffix = getContentSuffix(supply.purchaseUnit, supply.type);
+  const contentSuffix = getContentSuffix(supply.purchaseUnit, supply.type, getBaseUnit(supply));
   const equivalent = purchaseQuantity(1, supply.purchaseUnit);
 
   return `
@@ -302,18 +344,41 @@ export function render(ctx) {
 
 function syncFormForType(form, resetValues = false) {
   const type = form.elements.namedItem('type').value;
+  const baseUnitSelect = form.elements.namedItem('baseUnit');
+  const baseField = form.querySelector('[data-base-unit-field]');
+  const config = getSupplyType(type);
+  const baseUnits = allowedBaseUnits(type);
+  const previousBase = baseUnitSelect.value;
+
+  if (baseField) baseField.classList.toggle('hidden', baseUnits.length <= 1);
+  baseUnitSelect.innerHTML = baseUnitOptionsFor(
+    type,
+    baseUnits.includes(previousBase) ? previousBase : config.baseUnit
+  );
+  if (!baseUnits.includes(baseUnitSelect.value)) {
+    baseUnitSelect.value = config.baseUnit;
+  }
+
+  syncFormForBaseUnit(form, resetValues);
+}
+
+function syncFormForBaseUnit(form, resetValues = false) {
+  const type = form.elements.namedItem('type').value;
+  const baseUnit = form.elements.namedItem('baseUnit').value;
   const unitSelect = form.elements.namedItem('purchaseUnit');
   const contentInput = form.elements.namedItem('contentPerUnit');
-  const config = getSupplyType(type);
-  const allowed = allowedPurchaseUnits(type);
-
+  const allowed = allowedPurchaseUnits(type, baseUnit);
   const previousUnit = unitSelect.value;
-  unitSelect.innerHTML = unitOptionsFor(type, allowed.includes(previousUnit) ? previousUnit : config.defaultUnit);
+  const nextUnit =
+    !resetValues && allowed.includes(previousUnit)
+      ? previousUnit
+      : defaultPurchaseUnitFor(type, baseUnit);
+
+  unitSelect.innerHTML = unitOptionsFor(type, nextUnit, baseUnit);
+  unitSelect.value = nextUnit;
 
   if (resetValues || !allowed.includes(previousUnit)) {
-    const nextUnit = allowed.includes(previousUnit) ? previousUnit : config.defaultUnit;
-    unitSelect.value = nextUnit;
-    contentInput.value = String(defaultContentForUnit(nextUnit, type));
+    contentInput.value = String(defaultContentForUnit(nextUnit, type, baseUnit));
   }
 
   syncFormForUnit(form);
@@ -321,23 +386,24 @@ function syncFormForType(form, resetValues = false) {
 
 function syncFormForUnit(form) {
   const type = form.elements.namedItem('type').value;
+  const baseUnit = form.elements.namedItem('baseUnit').value;
   const unit = form.elements.namedItem('purchaseUnit').value;
   const contentInput = form.elements.namedItem('contentPerUnit');
-  const suffix = getContentSuffix(unit, type);
+  const suffix = getContentSuffix(unit, type, baseUnit);
   const label = form.querySelector('[data-content-label]');
   const help = form.querySelector('[data-content-help]');
   const unitHelp = form.querySelector('[data-unit-help]');
 
   if (label) label.textContent = `${getContentLabel(unit)} (${suffix})`;
-  if (help) help.textContent = getContentHelp(unit, type);
+  if (help) help.textContent = getContentHelp(unit, type, baseUnit);
 
-  if (isContentFixed(unit, type)) {
-    contentInput.value = String(defaultContentForUnit(unit, type));
+  if (isContentFixed(unit, type, baseUnit)) {
+    contentInput.value = String(defaultContentForUnit(unit, type, baseUnit));
     contentInput.readOnly = true;
   } else {
     contentInput.readOnly = false;
     if (!contentInput.value || contentInput.value === '1000' || contentInput.value === '1') {
-      contentInput.value = String(defaultContentForUnit(unit, type));
+      contentInput.value = String(defaultContentForUnit(unit, type, baseUnit));
     }
   }
 
@@ -348,8 +414,10 @@ function syncFormForUnit(form) {
       : type === 'base'
         ? 'La base se compra por bolsa. Escribe cuántos gramos trae una bolsa.'
         : type === 'liquid'
-          ? 'Los toppings líquidos se compran por litro o por kg. La app toma 1 litro o 1 kg como 1,000 ml.'
-          : 'Los toppings secos se compran por kg o por pieza.';
+          ? baseUnit === 'ml'
+            ? 'Se compra por litro, kg o gramos. La app toma 1 litro como 1,000 ml.'
+            : 'Se compra por kg, gramos o litro. La app toma 1 litro como 1,000 g.'
+          : 'Los toppings secos se compran por kg, gramos o pieza.';
   }
 
   updatePreview(form);
@@ -357,11 +425,12 @@ function syncFormForUnit(form) {
 
 function updatePreview(form) {
   const type = form.elements.namedItem('type').value;
+  const baseUnitValue = form.elements.namedItem('baseUnit').value;
   const unit = form.elements.namedItem('purchaseUnit').value;
   const content = Number(form.elements.namedItem('contentPerUnit').value);
   const price = Number(form.elements.namedItem('pricePerUnit').value);
   const preview = form.querySelector('[data-supply-preview]');
-  const baseUnit = getBaseUnitLabel({ type });
+  const baseUnit = getBaseUnitLabel({ type, baseUnit: baseUnitValue });
 
   if (!preview) return;
   if (!(content > 0) || !Number.isFinite(price)) {
@@ -403,7 +472,7 @@ function syncTypeFormUnits(form, selected = null) {
       ? 'Se compra por pieza o por bolsa. El contenido es cuántas piezas trae la bolsa.'
       : baseUnit === 'g'
         ? 'Se compra por kg, pieza o bolsa. El contenido es cuántos gramos trae cada una.'
-        : 'Se compra por litro o por kg. La app toma 1 litro o 1 kg como 1,000 ml.';
+        : 'Se compra por litro, kg o gramos. La app toma 1 litro o 1 kg como 1,000 ml.';
   }
 }
 
@@ -437,6 +506,9 @@ export function bind(root, ctx) {
 
   form.elements.namedItem('type').addEventListener('change', () => {
     syncFormForType(form, true);
+  });
+  form.elements.namedItem('baseUnit').addEventListener('change', () => {
+    syncFormForBaseUnit(form, true);
   });
   form.elements.namedItem('purchaseUnit').addEventListener('change', () => {
     syncFormForUnit(form);

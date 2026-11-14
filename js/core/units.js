@@ -3,12 +3,14 @@
  *
  * Regla importante:
  * - Todo el inventario se guarda internamente en la unidad base:
- *   gramos (g) para sólidos, mililitros (ml) para líquidos y piezas para
- *   artículos que se cuentan por unidad (desechables, limpieza, etc.).
+ *   gramos (g) para sólidos, gramos o mililitros (ml) para toppings
+ *   líquidos (según lo elegido en cada insumo) y piezas para artículos
+ *   que se cuentan por unidad (desechables, limpieza, etc.).
  * - Las compras se capturan en la unidad de compra del insumo
- *   (bolsa, kg, pieza o litro) y se convierten a la unidad base.
- * - Los toppings líquidos se pueden comprar por litro o por kg. Para la app,
- *   1 litro y 1 kg equivalen a 1,000 ml.
+ *   (bolsa, kg, gramo, pieza o litro) y se convierten a la unidad base.
+ * - Los toppings líquidos se pueden medir por peso (gramos) o por volumen
+ *   (mililitros), y se pueden comprar por kg, gramo o litro. Para la app,
+ *   1 litro = 1 kg = 1,000 g = 1,000 ml.
  * - Los conteos físicos se pueden capturar en g, kg, bolsa, pieza, ml o L.
  *
  * Además de los tres tipos fijos (base, seco y líquido), la familia puede
@@ -29,16 +31,22 @@ export const SUPPLY_TYPES = {
     label: 'Topping seco',
     shortLabel: 'Seco',
     baseUnit: 'g',
-    units: ['kg', 'piece'],
+    units: ['kg', 'g', 'piece'],
     defaultUnit: 'kg',
     defaultContent: 1000
   },
   liquid: {
     label: 'Topping líquido',
     shortLabel: 'Líquido',
-    baseUnit: 'ml',
-    units: ['liter', 'kg'],
-    defaultUnit: 'liter',
+    // Por defecto se mide por peso, pero cada insumo puede elegir ml.
+    baseUnit: 'g',
+    baseUnits: ['g', 'ml'],
+    units: ['kg', 'g', 'liter'],
+    purchaseUnitsByBaseUnit: {
+      g: ['kg', 'g', 'liter'],
+      ml: ['liter', 'kg', 'g']
+    },
+    defaultUnit: 'kg',
     defaultContent: 1000
   }
 };
@@ -49,6 +57,12 @@ export const BASE_UNIT_LABELS = {
   g: 'g',
   ml: 'ml',
   piece: 'pza'
+};
+
+export const BASE_UNIT_NAMES = {
+  g: 'Gramos (peso)',
+  ml: 'Mililitros (líquido)',
+  piece: 'Piezas (unidades)'
 };
 
 /**
@@ -63,9 +77,9 @@ export function normalizeBaseUnit(value) {
 
 export function purchaseUnitsForBaseUnit(baseUnit) {
   const unit = normalizeBaseUnit(baseUnit);
-  if (unit === 'ml') return ['liter', 'kg'];
+  if (unit === 'ml') return ['liter', 'kg', 'g'];
   if (unit === 'piece') return ['piece', 'bag'];
-  return ['kg', 'piece', 'bag'];
+  return ['kg', 'g', 'piece', 'bag'];
 }
 
 export function defaultUnitForBaseUnit(baseUnit) {
@@ -129,6 +143,7 @@ export function supplyTypeOrderIndex(type) {
 
 export const PURCHASE_UNIT_NAMES = {
   kg: 'kilogramo',
+  g: 'gramo',
   piece: 'pieza',
   liter: 'litro',
   bag: 'bolsa'
@@ -136,6 +151,7 @@ export const PURCHASE_UNIT_NAMES = {
 
 export const PURCHASE_UNIT_PLURALS = {
   kg: 'kilogramos',
+  g: 'gramos',
   piece: 'piezas',
   liter: 'litros',
   bag: 'bolsas'
@@ -145,8 +161,33 @@ export function getSupplyType(type) {
   return customSupplyTypes.get(type) ?? SUPPLY_TYPES[type] ?? SUPPLY_TYPES.dry;
 }
 
+/**
+ * Medidas base que acepta un tipo. La mayoría solo tiene una; los toppings
+ * líquidos aceptan gramos (peso) o mililitros (volumen) por insumo.
+ */
+export function allowedBaseUnits(type) {
+  const config = getSupplyType(type);
+  return Array.isArray(config.baseUnits) && config.baseUnits.length > 0
+    ? config.baseUnits
+    : [config.baseUnit];
+}
+
+export function defaultBaseUnitForType(type) {
+  return getSupplyType(type).baseUnit;
+}
+
+/**
+ * Toma la medida guardada en el insumo si es válida para su tipo; si no,
+ * cae en la medida por defecto del tipo. Así los insumos viejos (sin
+ * `baseUnit`) siguen funcionando.
+ */
+export function normalizeSupplyBaseUnit(type, value) {
+  const allowed = allowedBaseUnits(type);
+  return allowed.includes(value) ? value : defaultBaseUnitForType(type);
+}
+
 export function getBaseUnit(supply) {
-  return getSupplyType(supply?.type).baseUnit;
+  return normalizeSupplyBaseUnit(supply?.type, supply?.baseUnit);
 }
 
 export function getBaseUnitLabel(supply) {
@@ -174,6 +215,8 @@ export function getContentLabel(unit) {
       return 'Contenido por pieza';
     case 'kg':
       return 'Contenido por kilogramo';
+    case 'g':
+      return 'Contenido por gramo';
     case 'liter':
       return 'Contenido por litro';
     default:
@@ -181,26 +224,31 @@ export function getContentLabel(unit) {
   }
 }
 
-export function getContentSuffix(unit, type) {
-  return getBaseUnitLabel({ type });
+export function getContentSuffix(unit, type = null, baseUnit = null) {
+  const resolved = baseUnit ?? (type ? getSupplyType(type).baseUnit : 'g');
+  return BASE_UNIT_LABELS[normalizeBaseUnit(resolved)] ?? 'g';
 }
 
-export function getContentHelp(unit, type) {
-  const suffix = getContentSuffix(unit, type);
-  const baseUnit = getSupplyType(type).baseUnit;
+export function getContentHelp(unit, type = null, baseUnit = null) {
+  const resolvedBase = normalizeBaseUnit(
+    baseUnit ?? (type ? getSupplyType(type).baseUnit : 'g')
+  );
+  const suffix = getContentSuffix(unit, type, resolvedBase);
   switch (unit) {
     case 'bag':
-      return baseUnit === 'piece'
+      return resolvedBase === 'piece'
         ? `Ejemplo: una bolsa trae 100 ${suffix}.`
         : `Ejemplo: una bolsa trae 5,000 ${suffix}.`;
     case 'piece':
-      return baseUnit === 'piece'
+      return resolvedBase === 'piece'
         ? `Una pieza siempre cuenta como 1 ${suffix}.`
         : `Ejemplo: una pieza pesa 5 ${suffix}.`;
+    case 'g':
+      return resolvedBase === 'ml'
+        ? 'Se toma 1 gramo como 1 ml.'
+        : `Un gramo siempre es 1 ${suffix}.`;
     case 'kg':
-      return baseUnit === 'ml'
-        ? 'Se toman 1,000 ml por kilogramo.'
-        : `Un kilogramo siempre son 1,000 ${suffix}.`;
+      return `Un kilogramo siempre son 1,000 ${suffix}.`;
     case 'liter':
       return `Un litro siempre son 1,000 ${suffix}.`;
     default:
@@ -208,38 +256,68 @@ export function getContentHelp(unit, type) {
   }
 }
 
-export function isContentFixed(unit, type = null) {
-  if (unit === 'kg' || unit === 'liter') return true;
-  return unit === 'piece' && Boolean(type) && getSupplyType(type).baseUnit === 'piece';
+export function isContentFixed(unit, type = null, baseUnit = null) {
+  if (unit === 'kg' || unit === 'liter' || unit === 'g') return true;
+  const resolvedBase = baseUnit ?? (type ? getSupplyType(type).baseUnit : null);
+  return unit === 'piece' && Boolean(type) && resolvedBase === 'piece';
 }
 
 /**
  * Contenido que trae una unidad de compra cuando no hace falta preguntarlo.
  * - kg y litro siempre son 1,000 unidades base.
+ * - gramo siempre es 1 unidad base (1 g = 1 ml para la app).
  * - pieza de un tipo que se cuenta por pieza siempre es 1 pieza.
  * - bolsa de piezas se asume de 100; bolsa de g/ml de 5,000.
  */
 export function defaultContentForBase(unit, baseUnit) {
   const normalizedBase = normalizeBaseUnit(baseUnit);
   if (unit === 'kg' || unit === 'liter') return 1000;
+  if (unit === 'g') return normalizedBase === 'piece' ? '' : 1;
   if (unit === 'piece') return normalizedBase === 'piece' ? 1 : '';
   if (unit === 'bag') return normalizedBase === 'piece' ? 100 : 5000;
   return '';
 }
 
-export function defaultContentForUnit(unit, type = null) {
-  const baseUnit = type ? getSupplyType(type).baseUnit : 'g';
-  return defaultContentForBase(unit, baseUnit);
+export function defaultContentForUnit(unit, type = null, baseUnit = null) {
+  const resolvedBase = baseUnit ?? (type ? getSupplyType(type).baseUnit : 'g');
+  return defaultContentForBase(unit, resolvedBase);
 }
 
-export function allowedPurchaseUnits(type) {
-  return getSupplyType(type).units;
+/**
+ * Unidades de compra que acepta un tipo, considerando la medida elegida en
+ * el insumo (por ejemplo, un topping líquido medido en g o en ml).
+ */
+export function allowedPurchaseUnits(type, baseUnit = null) {
+  const config = getSupplyType(type);
+  if (config.purchaseUnitsByBaseUnit) {
+    const resolved = normalizeSupplyBaseUnit(type, baseUnit ?? config.baseUnit);
+    return config.purchaseUnitsByBaseUnit[resolved] ?? config.units;
+  }
+  return config.units;
 }
 
 export function purchaseBaseFactor(supply, unit = supply.purchaseUnit) {
   if (unit === 'kg' || unit === 'liter') return 1000;
+  if (unit === 'g') return 1;
   if (unit === 'piece' && getBaseUnit(supply) === 'piece') return 1;
   return Number(supply?.contentPerUnit) || 0;
+}
+
+/**
+ * Unidades en las que se puede capturar una compra suelta de este insumo.
+ * Incluye la unidad habitual (aunque sea bolsa o pieza con contenido
+ * capturado) y las unidades de conversión fija (kg, g, litro). No ofrece
+ * piezas de un insumo que se pesa, porque no se sabe cuánto pesa cada pieza.
+ */
+export function purchaseUnitsForSupply(supply) {
+  if (!supply) return [];
+  const base = getBaseUnit(supply);
+  return allowedPurchaseUnits(supply.type, supply.baseUnit).filter((unit) => {
+    if (unit === supply.purchaseUnit) return true;
+    if (unit === 'kg' || unit === 'g' || unit === 'liter') return true;
+    if (unit === 'piece') return base === 'piece';
+    return false;
+  });
 }
 
 export function purchaseToBase(quantity, supply, unit = supply.purchaseUnit) {

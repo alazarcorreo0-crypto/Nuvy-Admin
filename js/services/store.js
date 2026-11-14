@@ -338,8 +338,7 @@ export class DataStore {
     return this.addRecord('purchase', {
       ...data,
       supplyName: supply.name,
-      unit: supply.purchaseUnit,
-      contentPerUnit: supply.contentPerUnit
+      baseUnit: getBaseUnitLabel(supply)
     });
   }
 
@@ -354,8 +353,7 @@ export class DataStore {
     return this.updateRecord(id, {
       ...data,
       supplyName: supply.name,
-      unit: supply.purchaseUnit,
-      contentPerUnit: supply.contentPerUnit
+      baseUnit: getBaseUnitLabel(supply)
     });
   }
 

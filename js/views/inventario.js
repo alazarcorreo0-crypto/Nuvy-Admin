@@ -281,7 +281,7 @@ function renderEstimatedTable(ctx) {
 
 function renderCountItem(count, ctx) {
   const supply = ctx.store.getSupplyById(count.supplyId);
-  const baseUnit = count.baseUnit ?? (supply ? getBaseUnitLabel(supply) : 'g');
+  const baseUnit = supply ? getBaseUnitLabel(supply) : count.baseUnit ?? 'g';
   const entered = count.enteredUnit
     ? `${number(count.enteredQuantity, 2)} ${countUnitLabel(supply, count.enteredUnit)}`
     : baseQuantity(count.quantity, baseUnit);
@@ -312,7 +312,7 @@ function renderCountItem(count, ctx) {
 
 function renderWasteItem(waste, ctx) {
   const supply = ctx.store.getSupplyById(waste.supplyId);
-  const baseUnit = waste.baseUnit ?? (supply ? getBaseUnitLabel(supply) : 'g');
+  const baseUnit = supply ? getBaseUnitLabel(supply) : waste.baseUnit ?? 'g';
   const entered = waste.enteredUnit
     ? `${number(waste.enteredQuantity, 2)} ${countUnitLabel(supply, waste.enteredUnit)}`
     : baseQuantity(waste.quantity, baseUnit);

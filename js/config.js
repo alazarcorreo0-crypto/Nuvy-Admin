@@ -61,5 +61,5 @@ export const APP_CONFIG = {
    */
   purchaseCushionPercent: 10,
 
-  appVersion: '1.1.0'
+  appVersion: '1.2.0'
 };

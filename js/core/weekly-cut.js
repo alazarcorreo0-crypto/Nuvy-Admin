@@ -44,7 +44,11 @@ export function suggestPurchaseQuantity(supply, neededBase) {
   }
 
   const units = needed / content;
-  if (supply.purchaseUnit === 'bag' || supply.purchaseUnit === 'piece') {
+  if (
+    supply.purchaseUnit === 'bag' ||
+    supply.purchaseUnit === 'piece' ||
+    supply.purchaseUnit === 'g'
+  ) {
     return Math.ceil(units - 1e-9);
   }
   return ceilTo(units, 2);

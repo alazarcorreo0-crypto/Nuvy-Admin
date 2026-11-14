@@ -24,6 +24,7 @@ const fourDecimalFormatter = new Intl.NumberFormat('es-MX', {
 
 export const PURCHASE_UNIT_LABELS = {
   kg: 'kg',
+  g: 'g',
   piece: 'pieza',
   liter: 'L',
   bag: 'bolsa'
@@ -31,6 +32,7 @@ export const PURCHASE_UNIT_LABELS = {
 
 export const PURCHASE_UNIT_PLURALS = {
   kg: 'kg',
+  g: 'g',
   piece: 'piezas',
   liter: 'L',
   bag: 'bolsas'

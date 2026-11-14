@@ -7,7 +7,10 @@ import {
   hasSupplyType,
   isContentFixed,
   normalizeBaseUnit,
-  purchaseUnitsForBaseUnit
+  normalizeSupplyBaseUnit,
+  purchaseBaseFactor,
+  purchaseUnitsForBaseUnit,
+  purchaseUnitsForSupply
 } from './units.js';
 
 export class ValidationError extends Error {
@@ -73,13 +76,14 @@ export function validateSupply(input) {
     throw new ValidationError('Elige el tipo de insumo.', 'type');
   }
 
+  const baseUnit = normalizeSupplyBaseUnit(type, input.baseUnit);
   const purchaseUnit = String(input.purchaseUnit ?? '');
-  if (!allowedPurchaseUnits(type).includes(purchaseUnit)) {
+  if (!allowedPurchaseUnits(type, baseUnit).includes(purchaseUnit)) {
     throw new ValidationError('La unidad de compra no corresponde al tipo de insumo.', 'purchaseUnit');
   }
 
-  const contentPerUnit = isContentFixed(purchaseUnit, type)
-    ? defaultContentForUnit(purchaseUnit, type)
+  const contentPerUnit = isContentFixed(purchaseUnit, type, baseUnit)
+    ? defaultContentForUnit(purchaseUnit, type, baseUnit)
     : decimal(input.contentPerUnit, 'el contenido por unidad', { min: 0.0001 });
 
   const pricePerUnit = decimal(input.pricePerUnit, 'el precio de compra', { min: 0 });
@@ -87,6 +91,7 @@ export function validateSupply(input) {
   return {
     name,
     type,
+    baseUnit,
     purchaseUnit,
     contentPerUnit,
     pricePerUnit
@@ -118,10 +123,26 @@ export function validatePurchase(input, supply) {
   if (!supply) {
     throw new ValidationError('Elige un insumo.', 'supplyId');
   }
+
+  // Cada compra puede capturarse en cualquier unidad válida del insumo, sin
+  // importar la unidad de compra habitual. Así un topping líquido se puede
+  // registrar unas veces por kg y otras por gramos.
+  const unit = String(input.unit ?? supply.purchaseUnit ?? '');
+  if (!purchaseUnitsForSupply(supply).includes(unit)) {
+    throw new ValidationError('Elige una unidad de compra válida para este insumo.', 'unit');
+  }
+
+  const contentPerUnit =
+    unit === supply.purchaseUnit
+      ? Number(supply.contentPerUnit) || 0
+      : purchaseBaseFactor(supply, unit);
+
   return {
     date: date(input.date),
     supplyId: supply.id,
     quantity: decimal(input.quantity, 'la cantidad comprada', { min: 0.0001 }),
+    unit,
+    contentPerUnit,
     totalPaid: decimal(input.totalPaid, 'el total pagado', { min: 0 })
   };
 }

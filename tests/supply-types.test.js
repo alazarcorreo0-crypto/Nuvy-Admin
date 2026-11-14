@@ -12,9 +12,11 @@ import {
   isContentFixed,
   listSupplyTypes,
   purchaseToBase,
+  purchaseUnitsForSupply,
   setCustomSupplyTypes
 } from '../js/core/units.js';
 import {
+  validatePurchase,
   validateSupply,
   validateSupplyType
 } from '../js/core/validation.js';
@@ -90,7 +92,7 @@ test('un tipo personalizado líquido se compra por litro o kg', () => {
         defaultUnit: 'liter'
       });
 
-      assert.deepEqual(type.purchaseUnits, ['liter', 'kg']);
+      assert.deepEqual(type.purchaseUnits, ['liter', 'kg', 'g']);
       assert.equal(type.defaultUnit, 'liter');
 
       const supply = {
@@ -106,6 +108,170 @@ test('un tipo personalizado líquido se compra por litro o kg', () => {
       assert.equal(purchaseToBase(1.5, supply), 1500);
     }
   );
+});
+
+test('un topping líquido puede medirse en gramos o en mililitros', () => {
+  const inGrams = {
+    id: 'chocolate',
+    name: 'Chocolate líquido',
+    type: 'liquid',
+    baseUnit: 'g',
+    purchaseUnit: 'kg',
+    contentPerUnit: 1000,
+    pricePerUnit: 180
+  };
+
+  assert.equal(getBaseUnitLabel(inGrams), 'g');
+  assert.deepEqual(
+    countUnitOptions(inGrams).map((option) => option.value),
+    ['g', 'kg']
+  );
+  assert.equal(purchaseToBase(2, inGrams), 2000);
+  assert.equal(purchaseToBase(500, { ...inGrams, purchaseUnit: 'g' }), 500);
+
+  const inMilliliters = { ...inGrams, baseUnit: 'ml', purchaseUnit: 'liter' };
+  assert.equal(getBaseUnitLabel(inMilliliters), 'ml');
+  assert.deepEqual(
+    countUnitOptions(inMilliliters).map((option) => option.value),
+    ['ml', 'liter', 'g', 'kg']
+  );
+  assert.equal(countToBase(1, 'liter', inMilliliters), 1000);
+
+  // Los insumos viejos sin baseUnit usan la medida nueva por defecto: g.
+  assert.equal(getBaseUnitLabel({ ...inGrams, baseUnit: undefined }), 'g');
+});
+
+test('la validación guarda la medida elegida del topping líquido', () => {
+  const inMilliliters = validateSupply({
+    name: 'Chocolate líquido',
+    type: 'liquid',
+    baseUnit: 'ml',
+    purchaseUnit: 'liter',
+    contentPerUnit: '',
+    pricePerUnit: '180'
+  });
+  assert.equal(inMilliliters.baseUnit, 'ml');
+  assert.equal(inMilliliters.contentPerUnit, 1000);
+
+  const inGrams = validateSupply({
+    name: 'Chocolate líquido',
+    type: 'liquid',
+    baseUnit: 'g',
+    purchaseUnit: 'kg',
+    contentPerUnit: '',
+    pricePerUnit: '180'
+  });
+  assert.equal(inGrams.baseUnit, 'g');
+  assert.equal(inGrams.contentPerUnit, 1000);
+
+  const byGram = validateSupply({
+    name: 'Chocolate líquido',
+    type: 'liquid',
+    baseUnit: 'g',
+    purchaseUnit: 'g',
+    contentPerUnit: '',
+    pricePerUnit: '0.18'
+  });
+  assert.equal(byGram.contentPerUnit, 1);
+});
+
+test('una compra se puede capturar en kilos o gramos según convenga', () => {
+  const supply = {
+    id: 'chocolate',
+    name: 'Chocolate líquido',
+    type: 'liquid',
+    baseUnit: 'g',
+    purchaseUnit: 'kg',
+    contentPerUnit: 1000,
+    pricePerUnit: 180
+  };
+  const base = { date: '2026-11-14', supplyId: 'chocolate', totalPaid: '180' };
+
+  const byKg = validatePurchase({ ...base, quantity: '2', unit: 'kg' }, supply);
+  assert.equal(byKg.unit, 'kg');
+  assert.equal(byKg.contentPerUnit, 1000);
+
+  const byGram = validatePurchase({ ...base, quantity: '750', unit: 'g' }, supply);
+  assert.equal(byGram.unit, 'g');
+  assert.equal(byGram.contentPerUnit, 1);
+
+  // Sin unidad explícita se usa la unidad de compra habitual del insumo.
+  const fallback = validatePurchase({ ...base, quantity: '1' }, supply);
+  assert.equal(fallback.unit, 'kg');
+  assert.equal(fallback.contentPerUnit, 1000);
+
+  assert.throws(
+    () => validatePurchase({ ...base, quantity: '1', unit: 'bag' }, supply),
+    /unidad de compra válida/
+  );
+});
+
+test('una compra conserva el contenido capturado del insumo', () => {
+  const bagSupply = {
+    id: 'base',
+    name: 'Base de nieve',
+    type: 'base',
+    baseUnit: 'g',
+    purchaseUnit: 'bag',
+    contentPerUnit: 5000,
+    pricePerUnit: 200
+  };
+
+  const byBag = validatePurchase(
+    { date: '2026-11-14', supplyId: 'base', quantity: '1', unit: 'bag', totalPaid: '200' },
+    bagSupply
+  );
+  assert.equal(byBag.contentPerUnit, 5000);
+
+  const pieceSupply = {
+    id: 'nuez',
+    name: 'Nuez',
+    type: 'dry',
+    baseUnit: 'g',
+    purchaseUnit: 'piece',
+    contentPerUnit: 5,
+    pricePerUnit: 3
+  };
+
+  const byPiece = validatePurchase(
+    { date: '2026-11-14', supplyId: 'nuez', quantity: '10', unit: 'piece', totalPaid: '30' },
+    pieceSupply
+  );
+  assert.equal(byPiece.contentPerUnit, 5);
+
+  // Si se compra en una unidad con conversión fija, se usa esa conversión.
+  const byKg = validatePurchase(
+    { date: '2026-11-14', supplyId: 'nuez', quantity: '1', unit: 'kg', totalPaid: '300' },
+    pieceSupply
+  );
+  assert.equal(byKg.contentPerUnit, 1000);
+});
+
+test('las compras solo ofrecen unidades cuyo contenido se conoce', () => {
+  const byKg = {
+    id: 'nuez',
+    name: 'Nuez',
+    type: 'dry',
+    baseUnit: 'g',
+    purchaseUnit: 'kg',
+    contentPerUnit: 1000,
+    pricePerUnit: 300
+  };
+  assert.deepEqual(purchaseUnitsForSupply(byKg), ['kg', 'g']);
+
+  const byPiece = { ...byKg, purchaseUnit: 'piece', contentPerUnit: 5 };
+  assert.deepEqual(purchaseUnitsForSupply(byPiece), ['kg', 'g', 'piece']);
+
+  const byBag = {
+    id: 'base',
+    name: 'Base de nieve',
+    type: 'base',
+    baseUnit: 'g',
+    purchaseUnit: 'bag',
+    contentPerUnit: 5000,
+    pricePerUnit: 200
+  };
+  assert.deepEqual(purchaseUnitsForSupply(byBag), ['bag']);
 });
 
 test('los tipos personalizados se suman a los tres tipos fijos', () => {

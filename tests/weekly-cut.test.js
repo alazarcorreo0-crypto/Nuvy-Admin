@@ -489,10 +489,14 @@ test('conversiones de compra y conteo', () => {
   assert.equal(countToBase(2, 'bag', BASE), 10000);
   assert.equal(countToBase(500, 'g', BASE), 500);
   assert.equal(countToBase(1.5, 'kg', BASE), 1500);
-  assert.equal(countToBase(1, 'liter', LIQUID), 1000);
   assert.equal(countToBase(250, 'g', LIQUID), 250);
   assert.equal(countToBase(1.5, 'kg', LIQUID), 1500);
+  assert.equal(countToBase(1, 'liter', { ...LIQUID, baseUnit: 'ml' }), 1000);
   assert.equal(purchaseToBase(2, LIQUID_KG), 2000);
+  assert.equal(
+    purchaseToBase(500, { ...LIQUID, purchaseUnit: 'g', contentPerUnit: 1 }),
+    500
+  );
 });
 
 test('una compra de la semana siguiente no invalida el corte de semanas pasadas', () => {

@@ -46,7 +46,7 @@ La app tiene estas pantallas:
 | **Inicio** | Resumen del día y de la semana, dinero que queda, alertas de salud del negocio y avance de tu meta. |
 | **Ventas** | Registrar el total vendido del día, cuántos clientes hubo y **cerrar la caja** (cuadrar el efectivo). Descargable en CSV. |
 | **Gastos** | Sueldos, renta, luz, agua, gas… Cada gasto se marca como **fijo o variable**, puede ser **recurrente** (semana, quincena, mes) y los retiros del dueño van aparte. Descargable en CSV. |
-| **Compras** | Insumos que entran al inventario, con su costo. Se pueden **editar** y **deshacer** el borrado. Descargable en CSV. |
+| **Compras** | Insumos que entran al inventario, con su costo y la unidad de cada compra. Se pueden **editar** y **deshacer** el borrado. Descargable en CSV. |
 | **Inventario** | Conteo físico de lo que queda, **merma**, estimación del inventario actual con su **valor**, **días que alcanza** y **capital total**. Descargable en CSV. |
 | **Insumos** | Catálogo: base de nieve, toppings y **tipos personalizados** (desechables, limpieza, etc.). |
 | **Corte semanal** | Consumo, costo, **dinero que queda en caja**, ganancia real, food cost, compra sugerida, comparación con la semana anterior y **análisis de viabilidad**. |
@@ -93,7 +93,7 @@ Vendido = consumo − merma registrada
 - **Compra sugerida:** `consumo de la semana × (1 + colchón) − inventario final`.
   - El **colchón** estándar es 10 % (se puede cambiar en `js/config.js`, `purchaseCushionPercent`): la app sugiere comprar un poco más de lo que consumiste para no quedarte corto.
   - Si lo que quedó en inventario ya cubre el consumo más el colchón, **no se sugiere nada**.
-  - Bolsas y piezas se redondean **hacia arriba** (no se compran fracciones). Kilogramos y litros se redondean **hacia arriba a 2 decimales**.
+  - Bolsas, piezas y gramos se redondean **hacia arriba** (no se compran fracciones). Kilogramos y litros se redondean **hacia arriba a 2 decimales**.
 
 El corte también compara la semana contra la **semana anterior**: cuánto subieron o bajaron las ventas, los gastos, el consumo y la ganancia, con el porcentaje de cambio. Si la semana anterior no tiene datos, dice “sin comparación”.
 
@@ -586,10 +586,11 @@ También puede aparecer un aviso dentro de la app con el botón **Instalar Nuvy 
 ### Cada vez que compres insumos
 
 1. Ve a **Compras**.
-2. Elige el insumo, la cantidad comprada y el total pagado.
+2. Elige el insumo, la **unidad de compra** de esa compra, la cantidad y el total pagado.
 3. La app convierte automáticamente a gramos, mililitros o piezas y actualiza el costo promedio.
-   - Los toppings líquidos se pueden comprar **por litro o por kilogramo**. Para el cálculo, la app toma 1 litro o 1 kg como 1,000 ml.
-4. Si te equivocaste, toca el botón de **editar** en la compra, corrige la fecha, el insumo, la cantidad o el total, y guarda. El inventario y el costo se recalculan solos.
+   - Cada topping líquido puede medirse **en gramos (peso)** o **en mililitros (volumen)**. Elige la medida al dar de alta o editar el insumo.
+   - En cada compra puedes elegir **kg, gramos o litro** aunque el insumo tenga otra unidad habitual. Para el cálculo, la app toma 1 litro = 1 kg = 1,000 g = 1,000 ml.
+4. Si te equivocaste, toca el botón de **editar** en la compra, corrige la fecha, el insumo, la unidad, la cantidad o el total, y guarda. El inventario y el costo se recalculan solos.
 
 ### Cuando algo se pierda
 
@@ -633,10 +634,11 @@ En **Insumos** puedes crear tus propias categorías además de base, seco y líq
 2. Escribe el nombre y elige cómo se mide:
    - **Piezas:** para vasos, servilletas, cucharas, bolsas, etc.
    - **Gramos:** para productos que se pesan.
-   - **Mililitros:** para líquidos.
+   - **Mililitros:** para líquidos que se miden por volumen.
 3. La app arma sola las unidades de compra y de conteo. Por ejemplo, un tipo por piezas se compra por **pieza o bolsa** y se cuenta en **piezas o bolsas**.
-4. Puedes **renombrar** un tipo cuando quieras. Si ya tiene insumos registrados, no se puede cambiar cómo se mide (para no mezclar piezas con gramos).
-5. Solo puedes **borrar** un tipo que no tenga insumos. Si lo necesitas, primero cambia esos insumos a otro tipo.
+4. Los toppings líquidos son la excepción: en cada insumo puedes elegir **gramos o mililitros**, sin importar que compartan el mismo tipo.
+5. Puedes **renombrar** un tipo cuando quieras. Si ya tiene insumos registrados, no se puede cambiar cómo se mide (para no mezclar piezas con gramos).
+6. Solo puedes **borrar** un tipo que no tenga insumos. Si lo necesitas, primero cambia esos insumos a otro tipo.
 
 ---
 
@@ -827,7 +829,7 @@ Además:
 
 Los datos **no se pierden** al actualizar: están en Firebase (modo nube) o en el almacenamiento del teléfono (modo local). Los registros viejos siguen válidos: las funciones nuevas son opcionales y no cambian los números de lo que ya tenías capturado.
 
-La versión actual es la **1.1.0**.
+La versión actual es la **1.2.0**.
 
 ---
 

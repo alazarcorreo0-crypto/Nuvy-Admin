@@ -9,7 +9,9 @@ import {
 import {
   getBaseUnitLabel,
   getPurchaseUnitLabel,
-  purchaseToBase
+  purchaseBaseFactor,
+  purchaseToBase,
+  purchaseUnitsForSupply
 } from '../core/units.js';
 import {
   emptyState,
@@ -47,6 +49,16 @@ function supplyOptions(supplies, selected) {
     .join('');
 }
 
+function unitOptionsFor(supply, selected) {
+  if (!supply) return '';
+  return purchaseUnitsForSupply(supply)
+    .map(
+      (unit) =>
+        `<option value="${unit}" ${unit === selected ? 'selected' : ''}>${escapeHtml(getPurchaseUnitLabel(unit, true))}</option>`
+    )
+    .join('');
+}
+
 function renderForm(ctx) {
   const supplies = ctx.snapshot.supplies;
   if (supplies.length === 0) {
@@ -63,9 +75,10 @@ function renderForm(ctx) {
     : null;
   const editingSupply = editing ? ctx.store.getSupplyById(editing.supplyId) : null;
   const selectedSupplyId = editing?.supplyId ?? '';
+  const formSupply = editingSupply ?? supplies[0] ?? null;
   const initialUnit = editing
     ? (editing.unit ?? editingSupply?.purchaseUnit ?? '')
-    : '';
+    : (formSupply?.purchaseUnit ?? '');
 
   return `
     <section class="card form-card">
@@ -94,6 +107,14 @@ function renderForm(ctx) {
           </div>
 
           <div class="field">
+            <label for="purchase-unit">Unidad de compra</label>
+            <select id="purchase-unit" name="unit" required>
+              ${unitOptionsFor(formSupply, initialUnit)}
+            </select>
+            <span class="field-help">Puedes registrar esta compra por kg, gramo, litro, bolsa o pieza, según el insumo.</span>
+          </div>
+
+          <div class="field">
             <label for="purchase-quantity">Cantidad comprada</label>
             <div class="input-suffix-wrap">
               <input id="purchase-quantity" name="quantity" type="number" inputmode="decimal"
@@ -101,7 +122,7 @@ function renderForm(ctx) {
                 value="${editing ? escapeHtml(String(editing.quantity)) : ''}">
               <span class="input-suffix" data-purchase-unit>${escapeHtml(initialUnit ? getPurchaseUnitLabel(initialUnit) : 'unidad')}</span>
             </div>
-            <span class="field-help" data-purchase-quantity-help>Escribe cuántas bolsas, kg, piezas o litros compraste.</span>
+            <span class="field-help" data-purchase-quantity-help>Escribe cuántas bolsas, kg, gramos, piezas o litros compraste.</span>
           </div>
 
           <div class="field">
@@ -132,7 +153,7 @@ function renderForm(ctx) {
 
 function renderPurchaseItem(purchase, ctx) {
   const supply = ctx.store.getSupplyById(purchase.supplyId);
-  const baseUnit = supply ? getBaseUnitLabel(supply) : (purchase.baseUnit ?? 'g');
+  const baseUnit = purchase.baseUnit ?? (supply ? getBaseUnitLabel(supply) : 'g');
   const base = (Number(purchase.quantity) || 0) * (Number(purchase.contentPerUnit) || 0);
   const unit = purchase.unit ?? supply?.purchaseUnit ?? '';
   const costPerBase = base > 0 ? (Number(purchase.totalPaid) || 0) / base : 0;
@@ -233,24 +254,34 @@ function currentSupply(form, ctx) {
   return ctx.store.getSupplyById(form.elements.namedItem('supplyId').value);
 }
 
-function updatePurchaseForm(form, ctx) {
+function updatePurchaseForm(form, ctx, { resetUnit = false } = {}) {
   const supply = currentSupply(form, ctx);
   const unitLabel = form.querySelector('[data-purchase-unit]');
   const help = form.querySelector('[data-purchase-quantity-help]');
   const preview = form.querySelector('[data-purchase-preview]');
-  if (!supply) return;
+  const unitSelect = form.elements.namedItem('unit');
+  if (!supply || !unitSelect) return;
 
-  const unit = getPurchaseUnitLabel(supply.purchaseUnit);
-  if (unitLabel) unitLabel.textContent = unit;
+  const allowed = purchaseUnitsForSupply(supply);
+  const fallbackUnit = allowed.includes(supply.purchaseUnit) ? supply.purchaseUnit : allowed[0];
+  const unit = resetUnit || !allowed.includes(unitSelect.value) ? fallbackUnit : unitSelect.value;
+  unitSelect.innerHTML = unitOptionsFor(supply, unit);
+
+  const unitName = getPurchaseUnitLabel(unit);
+  const contentPerUnit =
+    unit === supply.purchaseUnit
+      ? Number(supply.contentPerUnit) || 0
+      : purchaseBaseFactor(supply, unit);
+  if (unitLabel) unitLabel.textContent = unitName;
   if (help) {
-    help.textContent = `Se registrará en ${getPurchaseUnitLabel(supply.purchaseUnit, true)}. Contenido: ${number(supply.contentPerUnit, 2)} ${getBaseUnitLabel(supply)} por ${unit}.`;
+    help.textContent = `Se registrará en ${getPurchaseUnitLabel(unit, true)}. Contenido: ${number(contentPerUnit, 2)} ${getBaseUnitLabel(supply)} por ${unitName}.`;
   }
 
   const quantity = Number(form.elements.namedItem('quantity').value);
   const total = Number(form.elements.namedItem('totalPaid').value);
   if (preview) {
     if (quantity > 0) {
-      const base = purchaseToBase(quantity, supply);
+      const base = purchaseToBase(quantity, supply, unit);
       const costPerBase = total > 0 ? total / base : 0;
       preview.textContent = `Entran ${baseQuantity(base, getBaseUnitLabel(supply))} al inventario.${total > 0 ? ` Costo promedio de esta compra: ${cost(costPerBase)} por ${getBaseUnitLabel(supply)}.` : ''}`;
     } else {
@@ -285,7 +316,8 @@ export function bind(root, ctx) {
     return;
   }
 
-  form.elements.namedItem('supplyId').addEventListener('change', () => updatePurchaseForm(form, ctx));
+  form.elements.namedItem('supplyId').addEventListener('change', () => updatePurchaseForm(form, ctx, { resetUnit: true }));
+  form.querySelector('[name="unit"]')?.addEventListener('change', () => updatePurchaseForm(form, ctx));
   form.elements.namedItem('quantity').addEventListener('input', () => updatePurchaseForm(form, ctx));
   form.elements.namedItem('totalPaid').addEventListener('input', () => updatePurchaseForm(form, ctx));
   updatePurchaseForm(form, ctx);
@@ -301,7 +333,7 @@ export function bind(root, ctx) {
       ctx.toast('Compra registrada. Inventario actualizado.', 'success');
     }
     resetFormWithDate(form, ctx.today, ['supplyId']);
-    updatePurchaseForm(form, ctx);
+    updatePurchaseForm(form, ctx, { resetUnit: true });
     ctx.refresh();
   });
 
