@@ -170,21 +170,25 @@ test('análisis de viabilidad: costo por gramo, margen y punto de equilibrio', (
   ];
   const cut = buildWeeklyCut(scenario);
 
-  // Producto consumido: 2,000 g de base + 400 g de nuez = 2,400 g por $200.
-  assert.equal(cut.viability.productConsumptionBase, 2400);
+  // Gramos que se cobran: solo la base (2,000 g). Los 400 g de nuez son
+  // topping: cuestan, pero no son gramos que el cliente pague.
+  assert.equal(cut.viability.productConsumptionBase, 2000);
+  assert.equal(cut.viability.productMixBase, 2400);
   closeTo(cut.viability.productConsumptionCost, 200);
-  closeTo(cut.viability.costPerGram, 200 / 2400);
-  closeTo(cut.viability.effectivePricePerGram, 5000 / 2400);
-  closeTo(cut.viability.marginPerGram, 2);
+  closeTo(cut.viability.costPerGram, 200 / 2000);
+  closeTo(cut.viability.effectivePricePerGram, 5000 / 2000);
+  closeTo(cut.viability.marginPerGram, 2.4);
 
   // Margen bruto: 5,000 − 200 = 4,800 (96% de las ventas).
   closeTo(cut.viability.grossMargin, 4800);
   closeTo(cut.viability.grossMarginPct, 0.96);
 
-  // Hay que cubrir $800 de gastos. Sin insumos de apoyo.
+  // Hay que cubrir $800 de gastos. Sin insumos de apoyo ni merma.
   closeTo(cut.viability.totalOverheads, 800);
+  closeTo(cut.viability.operatingExpenses, 800);
+  closeTo(cut.viability.contributionMargin, 4800);
   closeTo(cut.viability.breakEvenSales, 800 / 0.96);
-  closeTo(cut.viability.breakEvenGrams, 400);
+  closeTo(cut.viability.breakEvenGrams, 800 / 2.4);
 
   assert.equal(cut.viability.viable, true);
   assert.equal(cut.totalFixedExpenses, 500);
@@ -238,16 +242,19 @@ test('los insumos de tipos personalizados son de apoyo, no producto', () => {
       ]
     });
 
-    // Solo la base (1,000 g) cuenta como producto.
+    // Solo la base (1,000 g) cuenta como gramos vendidos.
     assert.equal(cut.viability.productConsumptionBase, 1000);
     closeTo(cut.viability.costPerGram, 0.04);
     closeTo(cut.viability.effectivePricePerGram, 1);
     closeTo(cut.viability.marginPerGram, 0.96);
 
-    // Los vasos consumidos ($50) van a los gastos por cubrir.
+    // Los vasos consumidos ($50) son costo variable: bajan la contribución
+    // pero no se suman otra vez a los gastos del punto de equilibrio.
     closeTo(cut.viability.supportConsumptionCost, 50);
+    closeTo(cut.viability.operatingExpenses, 100);
+    closeTo(cut.viability.contributionMargin, 910);
     closeTo(cut.viability.totalOverheads, 150);
-    closeTo(cut.viability.breakEvenSales, 150 / 0.96);
+    closeTo(cut.viability.breakEvenSales, 100 / 0.91);
 
     assert.equal(cut.viability.viable, true);
     closeTo(cut.profit, 810);
@@ -810,8 +817,8 @@ test('el ticket promedio se calcula solo con las ventas que traen clientes', () 
   assert.equal(cut.tickets.ticketSalesCount, 1);
   assert.equal(cut.tickets.totalTickets, 30);
   closeTo(cut.tickets.averageTicket, 100);
-  // 2,400 g de producto entre 30 clientes = 80 g por cliente.
-  closeTo(cut.tickets.gramsPerCustomer, 80);
+  // 2,000 g de base entre 30 clientes = 66.67 g por cliente.
+  closeTo(cut.tickets.gramsPerCustomer, 2000 / 30);
 });
 
 test('sin clientes capturados no hay ticket promedio', () => {

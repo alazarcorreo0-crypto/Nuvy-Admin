@@ -112,7 +112,14 @@ export function buildMonthlyCut({
 
   const productSoldCost = sum(productRows.map((row) => row.soldCost));
   const productWasteCost = sum(productRows.map((row) => row.wasteCost));
-  const productSoldBase = sum(productRows.map((row) => row.soldBase));
+  // Gramos de mezcla (base + toppings) y gramos que el cliente paga (base).
+  const productMixBase = sum(productRows.map((row) => row.soldBase));
+  const baseSoldBase = sum(
+    productRows
+      .filter((row) => row.supply?.type === 'base')
+      .map((row) => row.soldBase)
+  );
+  const productSoldBase = baseSoldBase > 0 ? baseSoldBase : productMixBase;
   const supportSoldCost = sum(supportRows.map((row) => row.soldCost));
   const supportWasteCost = sum(supportRows.map((row) => row.wasteCost));
   const totalWasteCost = productWasteCost + supportWasteCost;
@@ -187,6 +194,7 @@ export function buildMonthlyCut({
     productSoldCost,
     productWasteCost,
     productSoldBase,
+    productMixBase,
     supportSoldCost,
     supportWasteCost,
     totalWasteCost,

@@ -340,14 +340,14 @@ function renderViability(cut) {
         ${statCard({
           label: 'Costo del producto por gramo',
           value: cost(v.costPerGram),
-          detail: `${baseQuantity(v.productConsumptionBase, 'g')} de mezcla vendidos (base + toppings; los líquidos cuentan 1 L como 1 kg)`,
+          detail: `${baseQuantity(v.productConsumptionBase, 'g')} de base vendida. Incluye el costo de los toppings, pero los gramos que se cobran son solo los de la base.`,
           tone: 'default',
           iconName: 'scale'
         })}
         ${statCard({
           label: 'Precio real por gramo',
           value: cost(v.effectivePricePerGram),
-          detail: 'Ventas ÷ gramos vendidos (sin contar la merma)',
+          detail: 'Ventas ÷ gramos de base vendidos (sin contar la merma)',
           tone: 'info',
           iconName: 'cash'
         })}
@@ -362,7 +362,7 @@ function renderViability(cut) {
           label: 'Punto de equilibrio semanal',
           value: v.breakEvenSales !== null ? money(v.breakEvenSales) : '—',
           detail: v.breakEvenSales !== null
-            ? `Ventas mínimas para no perder${v.breakEvenGrams !== null ? ` (≈ ${number(v.breakEvenGrams / 1000)} kg)` : ''}. Cubre gastos fijos ${money(cut.totalFixedExpenses)} + variables ${money(cut.totalVariableExpenses)} + insumos de apoyo ${money(v.supportConsumptionCost)} + merma ${money(cut.waste.totalWasteCost)} = ${money(v.totalOverheads)}.`
+            ? `Ventas mínimas para no perder${v.breakEvenGrams !== null ? ` (≈ ${number(v.breakEvenGrams / 1000)} kg de base)` : ''}. Cubre gastos fijos ${money(cut.totalFixedExpenses)} + variables ${money(cut.totalVariableExpenses)} = ${money(v.operatingExpenses)}. Los vasos y la merma ya van descontados del margen.`
             : 'El costo del producto consume más de lo que se vende; no hay punto de equilibrio con estos números.',
           tone: 'warning',
           iconName: 'clipboard'

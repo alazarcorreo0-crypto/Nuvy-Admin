@@ -400,9 +400,19 @@ export function buildWeeklyCut({
   const supportWasteCost = sum(supportRows.map((row) => row.wasteCost));
   const totalWasteCost = productWasteCost + supportWasteCost;
   const totalWasteBase = productWasteBase + supportWasteBase;
-  // Gramos de mezcla vendidos: los tipos de producto se miden en g o ml
-  // y la app toma 1 L como 1 kg, así que se suman directo.
-  const productSoldBase = sum(productRows.map((row) => row.soldBase));
+  // Gramos de mezcla consumidos: base + toppings. Sirve de referencia.
+  const productMixBase = sum(productRows.map((row) => row.soldBase));
+
+  // Gramos que el cliente realmente paga: solo la base. Los toppings se
+  // sirven dentro del vaso y no se cobran por separado, así que no deben
+  // inflar el denominador del costo y del precio por gramo. Si la familia
+  // no tiene insumos de tipo "base", se usa la mezcla completa.
+  const baseSoldBase = sum(
+    productRows
+      .filter((row) => row.supply?.type === 'base')
+      .map((row) => row.soldBase)
+  );
+  const productSoldBase = baseSoldBase > 0 ? baseSoldBase : productMixBase;
 
   const totalSoldCost = productSoldCost + supportSoldCost;
   const totalConsumptionCost = sum(
@@ -470,24 +480,35 @@ export function buildWeeklyCut({
   const grossMargin = totalSales - productSoldCost;
   const grossMarginPct = totalSales > 0 ? grossMargin / totalSales : null;
 
-  // Todo lo que hay que cubrir antes de ganar: gastos fijos, gastos
-  // variables, el costo de los insumos de apoyo consumidos y la merma.
-  const totalOverheads =
-    totalFixedExpenses +
-    totalVariableExpenses +
-    supportSoldCost +
-    totalWasteCost;
+  // Costo variable real: producto + insumos de apoyo (vasos) + merma.
+  // La contribución es lo que queda para pagar los gastos del negocio.
+  const contributionMargin =
+    totalSales - productSoldCost - supportSoldCost - totalWasteCost;
+  const contributionMarginPct =
+    totalSales > 0 ? contributionMargin / totalSales : null;
+  const contributionPerGram = hasProductData
+    ? contributionMargin / productSoldBase
+    : null;
 
-  // Ventas necesarias para no perder dinero en la semana. Solo tiene
-  // sentido si se conoce el costo del producto (con conteos).
+  // Gastos del negocio (renta, sueldos, internet…). No incluyen los vasos
+  // ni la merma: esos ya están dentro del costo variable.
+  const businessExpenses = totalFixedExpenses + totalVariableExpenses;
+
+  // Todo lo que hay que cubrir antes de ganar (solo para mostrar).
+  const totalOverheads = businessExpenses + supportSoldCost + totalWasteCost;
+
+  // Ventas necesarias para no perder dinero en la semana. La contribución
+  // ya descuenta producto, vasos y merma, así que no se cuentan dos veces.
   const breakEvenSales =
-    hasProductData && grossMarginPct !== null && grossMarginPct > 0
-      ? totalOverheads / grossMarginPct
+    hasProductData &&
+    contributionMarginPct !== null &&
+    contributionMarginPct > 0
+      ? businessExpenses / contributionMarginPct
       : null;
-  // Gramos que habría que vender para cubrir lo mismo.
+  // Gramos de base que habría que vender para cubrir los gastos.
   const breakEvenGrams =
-    marginPerGram !== null && marginPerGram > 0
-      ? totalOverheads / marginPerGram
+    contributionPerGram !== null && contributionPerGram > 0
+      ? businessExpenses / contributionPerGram
       : null;
 
   const viable = complete && hasProductData && profit >= 0;
@@ -570,6 +591,7 @@ export function buildWeeklyCut({
     viability: {
       hasProductData,
       productConsumptionBase: productSoldBase,
+      productMixBase,
       productConsumptionCost: productSoldCost,
       productWasteBase,
       productWasteCost,
@@ -580,6 +602,10 @@ export function buildWeeklyCut({
       marginPerGram,
       grossMargin,
       grossMarginPct,
+      contributionMargin,
+      contributionMarginPct,
+      contributionPerGram,
+      operatingExpenses: businessExpenses,
       totalOverheads,
       breakEvenSales,
       breakEvenGrams,

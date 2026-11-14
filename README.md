@@ -101,10 +101,10 @@ El corte también compara la semana contra la **semana anterior**: cuánto subie
 
 El corte también incluye un panel que responde si el precio actual deja ganancia:
 
-- **Costo del producto por gramo:** lo que cuesta la mezcla vendida (base + toppings secos y líquidos; 1 L se toma como 1 kg). Los insumos de tipos personalizados (desechables, limpieza) no cuentan como producto: son de apoyo.
-- **Precio real por gramo:** ventas ÷ gramos **vendidos** (sin contar merma).
+- **Costo del producto por gramo:** lo que cuesta el producto vendido (base + toppings secos y líquidos; 1 L se toma como 1 kg) **dividido entre los gramos de base vendidos**. Los toppings cuestan, pero no se cobran por separado: los gramos que paga el cliente son los de la base. Los insumos de tipos personalizados (desechables, limpieza) no cuentan como producto: son de apoyo.
+- **Precio real por gramo:** ventas ÷ gramos de **base** vendidos (sin contar merma).
 - **Ganancia por gramo:** precio real − costo por gramo.
-- **Punto de equilibrio semanal:** las ventas mínimas para no perder dinero. Se calcula como `(gastos fijos + gastos variables + costo de insumos de apoyo consumidos + costo de la merma) ÷ margen bruto`.
+- **Punto de equilibrio semanal:** las ventas mínimas para no perder dinero. Se calcula como `(gastos fijos + gastos variables) ÷ margen de contribución`, donde el margen de contribución ya descuenta producto, insumos de apoyo y merma. Así los vasos no se cuentan dos veces.
 
 Solo necesita que registres los conteos físicos: sin conteos no hay consumo conocido y el panel te lo avisa.
 
@@ -194,7 +194,7 @@ Cada cierre guarda la fecha, el efectivo esperado, el contado, la tarjeta y una 
 Al registrar una venta puedes capturar (es opcional) **cuántos clientes o tickets hubo ese día**. Con eso el corte calcula:
 
 - **Ticket promedio:** `total vendido ÷ clientes`. Solo usa las ventas que traen clientes.
-- **Gramos por cliente:** cuántos gramos de mezcla se lleva cada cliente en promedio.
+- **Gramos por cliente:** cuántos gramos de base se lleva cada cliente en promedio.
 
 Si no capturas clientes, no aparece nada de esto y los demás números salen igual. Sirve para decidir precios: si el ticket promedio es bajo, conviene subir el precio por gramo en lugar de vender más.
 
