@@ -111,7 +111,7 @@ function renderForm(ctx) {
             <select id="purchase-unit" name="unit" required>
               ${unitOptionsFor(formSupply, initialUnit)}
             </select>
-            <span class="field-help">Puedes registrar esta compra por kg, gramo, litro, bolsa o pieza, según el insumo.</span>
+            <span class="field-help">Puedes registrar esta compra por kg, gramo, litro, galón, bolsa o pieza, según el insumo.</span>
           </div>
 
           <div class="field">

@@ -92,7 +92,7 @@ test('un tipo personalizado líquido se compra por litro o kg', () => {
         defaultUnit: 'liter'
       });
 
-      assert.deepEqual(type.purchaseUnits, ['liter', 'kg', 'g']);
+      assert.deepEqual(type.purchaseUnits, ['liter', 'gal', 'kg', 'g']);
       assert.equal(type.defaultUnit, 'liter');
 
       const supply = {
@@ -133,7 +133,7 @@ test('un topping líquido puede medirse en gramos o en mililitros', () => {
   assert.equal(getBaseUnitLabel(inMilliliters), 'ml');
   assert.deepEqual(
     countUnitOptions(inMilliliters).map((option) => option.value),
-    ['ml', 'liter', 'g', 'kg']
+    ['ml', 'liter', 'gal', 'g', 'kg']
   );
   assert.equal(countToBase(1, 'liter', inMilliliters), 1000);
 
@@ -271,7 +271,7 @@ test('las compras solo ofrecen unidades cuyo contenido se conoce', () => {
     contentPerUnit: 5000,
     pricePerUnit: 200
   };
-  assert.deepEqual(purchaseUnitsForSupply(byBag), ['bag']);
+  assert.deepEqual(purchaseUnitsForSupply(byBag), ['bag', 'kg', 'g', 'liter', 'gal']);
 });
 
 test('los tipos personalizados se suman a los tres tipos fijos', () => {

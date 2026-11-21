@@ -130,7 +130,7 @@ function renderForm(ctx) {
             <select id="supply-unit" name="purchaseUnit" required>
               ${unitOptionsFor(type, unit, baseUnit)}
             </select>
-            <span class="field-help" data-unit-help>La base se compra por bolsa; los toppings secos por kg, gramos o pieza; los líquidos por kg, gramos o litro.</span>
+            <span class="field-help" data-unit-help>Elige la unidad en la que compras este insumo.</span>
           </div>
 
           <div class="field">
@@ -149,7 +149,7 @@ function renderForm(ctx) {
                 value="${escapeHtml(String(editing?.pricePerUnit ?? ''))}">
               <span class="input-suffix">MXN</span>
             </div>
-            <span class="field-help">Es el precio que pagas hoy por una bolsa, kg, gramo, pieza o litro.</span>
+            <span class="field-help">Es el precio que pagas hoy por la unidad que elijas (bolsa, kg, litro, galón, pieza, etc.).</span>
           </div>
 
           <div class="field field-span-2">
@@ -408,16 +408,10 @@ function syncFormForUnit(form) {
   }
 
   if (unitHelp) {
-    const config = getSupplyType(type);
-    unitHelp.textContent = config.custom
-      ? `Se compra por ${config.units.map((item) => getPurchaseUnitLabel(item, true)).join(', ')}.`
-      : type === 'base'
-        ? 'La base se compra por bolsa. Escribe cuántos gramos trae una bolsa.'
-        : type === 'liquid'
-          ? baseUnit === 'ml'
-            ? 'Se compra por litro, kg o gramos. La app toma 1 litro como 1,000 ml.'
-            : 'Se compra por kg, gramos o litro. La app toma 1 litro como 1,000 g.'
-          : 'Los toppings secos se compran por kg, gramos o pieza.';
+    const units = allowedPurchaseUnits(type, baseUnit)
+      .map((item) => getPurchaseUnitLabel(item, true))
+      .join(', ');
+    unitHelp.textContent = `Puedes comprar este insumo por ${units}.`;
   }
 
   updatePreview(form);

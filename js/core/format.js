@@ -27,7 +27,8 @@ export const PURCHASE_UNIT_LABELS = {
   g: 'g',
   piece: 'pieza',
   liter: 'L',
-  bag: 'bolsa'
+  bag: 'bolsa',
+  gal: 'gal'
 };
 
 export const PURCHASE_UNIT_PLURALS = {
@@ -35,7 +36,8 @@ export const PURCHASE_UNIT_PLURALS = {
   g: 'g',
   piece: 'piezas',
   liter: 'L',
-  bag: 'bolsas'
+  bag: 'bolsas',
+  gal: 'gal'
 };
 
 export function money(value) {

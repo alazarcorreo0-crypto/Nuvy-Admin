@@ -18,12 +18,20 @@
  * los datos compartidos y se registran aquí en tiempo de ejecución.
  */
 
+// 1 galón (US) = 3.785411784 litros = 3,785.411784 ml/g base.
+const GALLON_TO_BASE = 3785.411784;
+
 export const SUPPLY_TYPES = {
   base: {
     label: 'Base de nieve',
     shortLabel: 'Base',
     baseUnit: 'g',
-    units: ['bag'],
+    baseUnits: ['g', 'ml'],
+    units: ['bag', 'kg', 'g', 'liter', 'gal'],
+    purchaseUnitsByBaseUnit: {
+      g: ['bag', 'kg', 'g', 'liter', 'gal'],
+      ml: ['bag', 'gal', 'liter', 'kg', 'g']
+    },
     defaultUnit: 'bag',
     defaultContent: 5000
   },
@@ -31,7 +39,7 @@ export const SUPPLY_TYPES = {
     label: 'Topping seco',
     shortLabel: 'Seco',
     baseUnit: 'g',
-    units: ['kg', 'g', 'piece'],
+    units: ['kg', 'g', 'piece', 'bag'],
     defaultUnit: 'kg',
     defaultContent: 1000
   },
@@ -41,10 +49,10 @@ export const SUPPLY_TYPES = {
     // Por defecto se mide por peso, pero cada insumo puede elegir ml.
     baseUnit: 'g',
     baseUnits: ['g', 'ml'],
-    units: ['kg', 'g', 'liter'],
+    units: ['kg', 'g', 'liter', 'gal'],
     purchaseUnitsByBaseUnit: {
-      g: ['kg', 'g', 'liter'],
-      ml: ['liter', 'kg', 'g']
+      g: ['kg', 'g', 'liter', 'gal'],
+      ml: ['liter', 'gal', 'kg', 'g']
     },
     defaultUnit: 'kg',
     defaultContent: 1000
@@ -77,9 +85,9 @@ export function normalizeBaseUnit(value) {
 
 export function purchaseUnitsForBaseUnit(baseUnit) {
   const unit = normalizeBaseUnit(baseUnit);
-  if (unit === 'ml') return ['liter', 'kg', 'g'];
+  if (unit === 'ml') return ['liter', 'gal', 'kg', 'g'];
   if (unit === 'piece') return ['piece', 'bag'];
-  return ['kg', 'g', 'piece', 'bag'];
+  return ['kg', 'g', 'liter', 'gal', 'piece', 'bag'];
 }
 
 export function defaultUnitForBaseUnit(baseUnit) {
@@ -146,7 +154,8 @@ export const PURCHASE_UNIT_NAMES = {
   g: 'gramo',
   piece: 'pieza',
   liter: 'litro',
-  bag: 'bolsa'
+  bag: 'bolsa',
+  gal: 'galón'
 };
 
 export const PURCHASE_UNIT_PLURALS = {
@@ -154,7 +163,8 @@ export const PURCHASE_UNIT_PLURALS = {
   g: 'gramos',
   piece: 'piezas',
   liter: 'litros',
-  bag: 'bolsas'
+  bag: 'bolsas',
+  gal: 'galones'
 };
 
 export function getSupplyType(type) {
@@ -219,6 +229,8 @@ export function getContentLabel(unit) {
       return 'Contenido por gramo';
     case 'liter':
       return 'Contenido por litro';
+    case 'gal':
+      return 'Contenido por galón';
     default:
       return 'Contenido por unidad';
   }
@@ -251,13 +263,15 @@ export function getContentHelp(unit, type = null, baseUnit = null) {
       return `Un kilogramo siempre son 1,000 ${suffix}.`;
     case 'liter':
       return `Un litro siempre son 1,000 ${suffix}.`;
+    case 'gal':
+      return `Un galón siempre son 3,785.41 ${suffix}.`;
     default:
       return '';
   }
 }
 
 export function isContentFixed(unit, type = null, baseUnit = null) {
-  if (unit === 'kg' || unit === 'liter' || unit === 'g') return true;
+  if (unit === 'kg' || unit === 'liter' || unit === 'g' || unit === 'gal') return true;
   const resolvedBase = baseUnit ?? (type ? getSupplyType(type).baseUnit : null);
   return unit === 'piece' && Boolean(type) && resolvedBase === 'piece';
 }
@@ -265,6 +279,7 @@ export function isContentFixed(unit, type = null, baseUnit = null) {
 /**
  * Contenido que trae una unidad de compra cuando no hace falta preguntarlo.
  * - kg y litro siempre son 1,000 unidades base.
+ * - galón siempre son 3,785.411784 unidades base.
  * - gramo siempre es 1 unidad base (1 g = 1 ml para la app).
  * - pieza de un tipo que se cuenta por pieza siempre es 1 pieza.
  * - bolsa de piezas se asume de 100; bolsa de g/ml de 5,000.
@@ -272,6 +287,7 @@ export function isContentFixed(unit, type = null, baseUnit = null) {
 export function defaultContentForBase(unit, baseUnit) {
   const normalizedBase = normalizeBaseUnit(baseUnit);
   if (unit === 'kg' || unit === 'liter') return 1000;
+  if (unit === 'gal') return GALLON_TO_BASE;
   if (unit === 'g') return normalizedBase === 'piece' ? '' : 1;
   if (unit === 'piece') return normalizedBase === 'piece' ? 1 : '';
   if (unit === 'bag') return normalizedBase === 'piece' ? 100 : 5000;
@@ -298,6 +314,7 @@ export function allowedPurchaseUnits(type, baseUnit = null) {
 
 export function purchaseBaseFactor(supply, unit = supply.purchaseUnit) {
   if (unit === 'kg' || unit === 'liter') return 1000;
+  if (unit === 'gal') return GALLON_TO_BASE;
   if (unit === 'g') return 1;
   if (unit === 'piece' && getBaseUnit(supply) === 'piece') return 1;
   return Number(supply?.contentPerUnit) || 0;
@@ -306,7 +323,7 @@ export function purchaseBaseFactor(supply, unit = supply.purchaseUnit) {
 /**
  * Unidades en las que se puede capturar una compra suelta de este insumo.
  * Incluye la unidad habitual (aunque sea bolsa o pieza con contenido
- * capturado) y las unidades de conversión fija (kg, g, litro). No ofrece
+ * capturado) y las unidades de conversión fija (kg, g, litro, galón). No ofrece
  * piezas de un insumo que se pesa, porque no se sabe cuánto pesa cada pieza.
  */
 export function purchaseUnitsForSupply(supply) {
@@ -314,7 +331,7 @@ export function purchaseUnitsForSupply(supply) {
   const base = getBaseUnit(supply);
   return allowedPurchaseUnits(supply.type, supply.baseUnit).filter((unit) => {
     if (unit === supply.purchaseUnit) return true;
-    if (unit === 'kg' || unit === 'g' || unit === 'liter') return true;
+    if (unit === 'kg' || unit === 'g' || unit === 'liter' || unit === 'gal') return true;
     if (unit === 'piece') return base === 'piece';
     return false;
   });
@@ -353,6 +370,7 @@ export function countUnitOptions(supply) {
     return [
       { value: 'ml', label: 'mililitros (ml)', factor: 1 },
       { value: 'liter', label: 'litros (L)', factor: 1000 },
+      { value: 'gal', label: 'galones (gal)', factor: GALLON_TO_BASE },
       { value: 'g', label: 'gramos (g)', factor: 1 },
       { value: 'kg', label: 'kilogramos (kg)', factor: 1000 }
     ];
